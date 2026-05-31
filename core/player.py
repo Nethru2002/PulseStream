@@ -1,21 +1,19 @@
 import pygame
-import os
 
 class AudioPlayer:
     def __init__(self):
         pygame.mixer.init()
-        self.current_track = None
         self.is_paused = False
+        self.current_file = None
 
-    def play(self, file_path):
-        if not os.path.exists(file_path):
-            print("File not found")
-            return
-        
-        pygame.mixer.music.load(file_path)
-        pygame.mixer.music.play()
-        self.current_track = file_path
-        self.is_paused = False
+    def play(self, file_path, start_time=0):
+        try:
+            pygame.mixer.music.load(file_path)
+            pygame.mixer.music.play(start=start_time)
+            self.current_file = file_path
+            self.is_paused = False
+        except Exception as e:
+            print(f"Engine Error: {e}")
 
     def toggle_pause(self):
         if self.is_paused:
@@ -27,6 +25,10 @@ class AudioPlayer:
 
     def stop(self):
         pygame.mixer.music.stop()
+        pygame.mixer.music.unload()
 
     def set_volume(self, val):
-        pygame.mixer.music.set_volume(float(val) / 100)
+        pygame.mixer.music.set_volume(val)
+
+    def get_pos(self):
+        return pygame.mixer.music.get_pos() / 1000

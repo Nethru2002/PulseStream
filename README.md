@@ -1,96 +1,114 @@
 # 🎵 PulseStream
-### Developed by Nethru Randev
+### **Developed by Nethru Randev**
 
-**PulseStream** is a high-performance, professional-grade desktop music application. It features a sleek, industry-standard **OLED-Dark** interface inspired by Spotify and Apple Music. Built for modern desktop environments, PulseStream allows users to stream music globally via YouTube, manage local audio libraries, and identify unknown songs using AI-powered recognition.
+**PulseStream** is a high-performance, professional-grade desktop music application designed for a premium listening experience. It features a sophisticated **OLED-Dark** interface, combining global YouTube streaming, local file management, and AI-powered song recognition into a single, seamless dashboard.
 
 ---
 
 ## 🚀 Key Features
 
-*   **Next-Level Modern GUI:** A minimalist interface built with `CustomTkinter`, featuring a floating player "pill," high-density track cards, and smooth hover animations.
-*   **Global Music Streaming:** Search for any track or paste YouTube URLs directly. PulseStream handles the extraction and caching for a seamless experience.
-*   **Local Library Management:** High-fidelity playback for your own `.mp3`, `.wav`, and `.ogg` files.
-*   **AI Song Identification:** Integrated "Identify" feature (powered by Shazam) that records 7 seconds of ambient audio to detect song metadata.
-*   **Optimized Performance:** Multi-threaded architecture ensures the UI remains responsive even during heavy downloads or audio processing.
-*   **Pure OLED Design:** Deep black and gray palette designed for high-contrast displays to reduce eye strain.
+*   **Next-Level Modern GUI:** Built with `CustomTkinter`, featuring a floating "Pill" player, rounded glassmorphism track cards, and smooth hover animations.
+*   **Global Music Streaming:** Search for any track or artist. PulseStream extracts, streams, and caches audio for high-quality playback.
+*   **Local Library:** Full support for `.mp3`, `.wav`, and `.ogg` files stored on your computer.
+*   **AI Song Identification:** Integrated "Identify" tool powered by Shazam. Records 7 seconds of ambient audio to find titles and artists.
+*   **Advanced Playback Controls:**
+    *   **Smooth Seeking:** A real-time progress slider for rewinding/fast-forwarding tracks.
+    *   **Precise Volume:** Logarithmic volume scaling.
+    *   **Context Menu:** Right-click any song to "Bring to Front" or "Send to Back" to manage your session queue.
+*   **Permanent Downloads:** Dedicated download button to save streamed tracks from the cache to your permanent local storage.
+*   **Optimized Performance:** Multi-threaded processing ensures the UI never freezes during downloads or song recognition.
+
+---
+
+## 📂 Project Structure
+
+Following the professional modular architecture:
+
+```text
+PULSESTREAM/
+│
+├── core/                  # Audio Engine Layer
+│   ├── __init__.py
+│   ├── player.py          # Pygame-based playback & seeking logic
+│   └── recorder.py        # PyAudio microphone recording logic
+│
+├── services/              # API & Service Layer
+│   ├── __init__.py
+│   ├── recognizer.py      # Shazam API song identification
+│   └── searcher.py        # YouTube extraction & metadata service
+│
+├── ui/                    # Presentation Layer
+│   ├── __init__.py
+│   ├── components.py      # Custom widgets (SearchArea, TrackRow, etc.)
+│   └── styles.py          # Professional OLED color palette
+│
+├── utils/                 # Utility Layer
+│   ├── __init__.py
+│   └── helpers.py         # Path handling and directory management
+│
+├── cache/                 # Temporary storage for streamed tracks
+├── database.db            # Local data persistence
+├── ffmpeg.exe             # Core binary for audio conversion
+├── ffprobe.exe            # Media metadata analyzer
+├── main.py                # Application Entry Point & Layout Manager
+├── requirements.txt       # List of Python dependencies
+└── README.md              # Project documentation
+```
 
 ---
 
 ## 🛠 Tech Stack
 
-*   **Language:** Python 3.9+ (Fully compatible with 3.13)
-*   **GUI Framework:** `CustomTkinter`
+*   **GUI:** `CustomTkinter`
 *   **Audio Engine:** `Pygame (mixer)`
-*   **Streaming/Extraction:** `yt-dlp`
-*   **Recognition/ID:** `Shazamio` & `PyAudio`
+*   **Streaming:** `yt-dlp`
+*   **Identification:** `Shazamio` & `PyAudio`
+*   **Metadata/Seeking:** `Mutagen`
 *   **Media Processing:** `FFmpeg`
-*   **UI Assets:** `Pillow` (PIL)
+*   **Image Handling:** `Pillow`
 
 ---
 
 ## 📦 System Requirements & Setup
 
 ### 1. FFmpeg (Mandatory)
-PulseStream requires FFmpeg to convert YouTube streams into playable audio.
-*   Download the **Essentials Build** from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip).
-*   Extract the zip and copy **`ffmpeg.exe`** and **`ffprobe.exe`** from the `bin` folder directly into your `PulseStream/` root directory.
+PulseStream requires **ffmpeg.exe** and **ffprobe.exe** to be present in the root folder (as shown in the structure above) to handle YouTube audio conversion.
 
 ### 2. Node.js (Highly Recommended)
-YouTube frequently updates its security. Installing [Node.js](https://nodejs.org/) allows `yt-dlp` to solve JavaScript signatures, preventing errors and ensuring fast streaming.
+Install [Node.js](https://nodejs.org/) to allow the streaming engine to bypass YouTube's signature protection for faster and more reliable searching.
 
-### 3. Python Dependencies
-Install all required libraries using:
-```bash
-pip install customtkinter pygame yt-dlp shazamio pyaudio pillow pydub
-```
-
----
-
-## 📂 Project Structure
-
-```text
-PulseStream/
-│
-├── main.py                # Main Application Entry Point
-├── ffmpeg.exe             # Media Conversion Binary
-├── ffprobe.exe            # Media Metadata Binary
-├── cache/                 # Cached Streaming Data (Auto-generated)
-│
-├── core/                  # Audio Engines
-│   ├── player.py          # Playback logic (Pygame)
-│   └── recorder.py        # Recording logic (PyAudio)
-│
-├── services/              # API & Network Services
-│   ├── searcher.py        # YouTube Streaming & Search service
-│   └── recognizer.py      # Shazam Identification service
-│
-├── ui/                    # Presentation Layer
-│   ├── components.py      # Modern Custom Widgets
-│   └── styles.py          # OLED Palette & Fonts
-│
-└── utils/                 # Utilities
-    └── helpers.py         # Directory & Path handlers
+### 3. Installation
+Install all required Python libraries via pip:
+```powershell
+pip install customtkinter pygame yt-dlp shazamio pyaudio pillow pydub mutagen
 ```
 
 ---
 
 ## 🎮 How to Use
 
-1.  **Launch:** Run `python main.py`.
-2.  **Discover:** Type a song name in the search bar and press `Enter`. The track will appear in your "Your Tracks" list.
-3.  **Library:** Click **📂 Library** in the sidebar to add local music from your computer.
-4.  **Identify:** Click **🎙 Identify** to discover a song playing in your room. PulseStream will display the result after 7 seconds.
-5.  **Control:** Use the floating pill at the bottom to Play, Pause, or adjust Volume.
+1.  **Run the App:** Execute `python main.py`.
+2.  **Search & Stream:** Type a song name in the top search bar and click the **Search** button. The track will appear in "Your Tracks."
+3.  **Local Files:** Click **📂 Library** in the sidebar to add files from your PC.
+4.  **Identify Music:** Click **🎙 Identify Song**. The app will listen for 7 seconds and display the result.
+5.  **Playback:** 
+    *   **Double-Click** or click a song row to play.
+    *   Use the **Floating Pill Player** to play/pause.
+    *   **Drag the slider** to rewind or skip to any part of the song.
+    *   **Right-Click** a track to move it to the top or bottom of the list.
+6.  **Download:** Click the **📥 icon** on any streamed track to save it permanently to your computer.
 
 ---
 
 ## 🔧 Troubleshooting
 
-*   **UI Issues:** PulseStream is optimized for 1250x850. If elements appear overlapped, ensure your Windows Display Scaling is set to 100%.
-*   **Streaming Errors:** If search results fail, update the core extractor: `pip install -U yt-dlp`.
-*   **Recognition Fails:** Ensure your microphone is enabled in your OS System Settings.
+*   **Search/Stream Fails:** Update the extractor logic using `pip install -U yt-dlp`.
+*   **No Sound/Audio Lockup:** Ensure `ffmpeg.exe` is in the root folder and not blocked by antivirus.
+*   **Blue Highlight on Search:** PulseStream includes an "Anti-Focus" logic, but if it persists, simply click anywhere on the sidebar to clear the highlight.
 
 ---
 
 ## 📜 Disclaimer
-*This software is intended for personal and educational use. Please respect copyright laws and the terms of service of third-party platforms.*
+*PulseStream is developed for educational and personal use. Please respect copyright laws and the terms of service of content providers.*
+
+**© 2024 PulseStream | Developed by Nethru Randev**
