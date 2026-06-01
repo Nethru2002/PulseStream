@@ -1,114 +1,104 @@
 # 🎵 PulseStream
-### **Developed by Nethru Randev**
+### Developed by Nethru Randev
 
-**PulseStream** is a high-performance, professional-grade desktop music application designed for a premium listening experience. It features a sophisticated **OLED-Dark** interface, combining global YouTube streaming, local file management, and AI-powered song recognition into a single, seamless dashboard.
+**PulseStream** is a high-performance, professional-grade desktop music suite. It combines the aesthetic elegance of modern platforms like Spotify and Apple Music with powerful utility features like AI song identification, global streaming extraction, and seamless local library management. 
+
+Designed with a modular architecture, PulseStream is built to be fast, responsive, and visually immersive, featuring a "Zero-Overlap" Grid layout and a floating "Pill" player bar.
 
 ---
 
 ## 🚀 Key Features
 
-*   **Next-Level Modern GUI:** Built with `CustomTkinter`, featuring a floating "Pill" player, rounded glassmorphism track cards, and smooth hover animations.
-*   **Global Music Streaming:** Search for any track or artist. PulseStream extracts, streams, and caches audio for high-quality playback.
-*   **Local Library:** Full support for `.mp3`, `.wav`, and `.ogg` files stored on your computer.
-*   **AI Song Identification:** Integrated "Identify" tool powered by Shazam. Records 7 seconds of ambient audio to find titles and artists.
+*   **Next-Level Modern GUI:** A minimalist interface engineered with `CustomTkinter`, featuring a floating player bar, high-density track cards, and smooth hover animations.
+*   **Unified Search & Stream:** A redesigned search area featuring a dedicated **Search Button**. Search for any song or artist, and PulseStream will fetch and stream the high-quality audio instantly.
+*   **AI Song Identification:** Powered by the Shazam API. The tool listens through your microphone for 7 seconds to identify unknown tracks.
+*   **NEW: Instant Stream from ID:** After identifying a song, PulseStream prompts the user to stream the song immediately, bridging the gap between discovery and listening.
 *   **Advanced Playback Controls:**
-    *   **Smooth Seeking:** A real-time progress slider for rewinding/fast-forwarding tracks.
-    *   **Precise Volume:** Logarithmic volume scaling.
-    *   **Context Menu:** Right-click any song to "Bring to Front" or "Send to Back" to manage your session queue.
-*   **Permanent Downloads:** Dedicated download button to save streamed tracks from the cache to your permanent local storage.
-*   **Optimized Performance:** Multi-threaded processing ensures the UI never freezes during downloads or song recognition.
-
----
-
-## 📂 Project Structure
-
-Following the professional modular architecture:
-
-```text
-PULSESTREAM/
-│
-├── core/                  # Audio Engine Layer
-│   ├── __init__.py
-│   ├── player.py          # Pygame-based playback & seeking logic
-│   └── recorder.py        # PyAudio microphone recording logic
-│
-├── services/              # API & Service Layer
-│   ├── __init__.py
-│   ├── recognizer.py      # Shazam API song identification
-│   └── searcher.py        # YouTube extraction & metadata service
-│
-├── ui/                    # Presentation Layer
-│   ├── __init__.py
-│   ├── components.py      # Custom widgets (SearchArea, TrackRow, etc.)
-│   └── styles.py          # Professional OLED color palette
-│
-├── utils/                 # Utility Layer
-│   ├── __init__.py
-│   └── helpers.py         # Path handling and directory management
-│
-├── cache/                 # Temporary storage for streamed tracks
-├── database.db            # Local data persistence
-├── ffmpeg.exe             # Core binary for audio conversion
-├── ffprobe.exe            # Media metadata analyzer
-├── main.py                # Application Entry Point & Layout Manager
-├── requirements.txt       # List of Python dependencies
-└── README.md              # Project documentation
-```
+    *   **Precise Seeking:** A smooth progress slider allows you to rewind or skip to any position in a track.
+    *   **Dynamic Volume:** Real-time volume scaling optimized to prevent audio engine lockup.
+*   **Download Manager:** Streamed songs can be permanently saved to your computer as `.mp3` files with a single click (📥).
+*   **Queue Management:** Right-click context menus on any track allow you to organize your session by bringing tracks to the **Front** or sending them to the **Back** of the list.
 
 ---
 
 ## 🛠 Tech Stack
 
-*   **GUI:** `CustomTkinter`
-*   **Audio Engine:** `Pygame (mixer)`
-*   **Streaming:** `yt-dlp`
-*   **Identification:** `Shazamio` & `PyAudio`
-*   **Metadata/Seeking:** `Mutagen`
-*   **Media Processing:** `FFmpeg`
-*   **Image Handling:** `Pillow`
+*   **GUI Framework:** `CustomTkinter` (Premium-themed modern widgets).
+*   **Audio Engine:** `Pygame (mixer)` (Low-latency processing).
+*   **Metadata & Logic:** `Mutagen` (Track duration and precise seeking).
+*   **Streaming Extraction:** `yt-dlp` (High-speed YouTube data handling).
+*   **AI Recognition:** `Shazamio` & `PyAudio`.
+*   **Media Processing:** `FFmpeg` (Required binary for audio conversion).
+*   **Language:** Python 3.9+ (Optimized for 3.13.x).
 
 ---
 
 ## 📦 System Requirements & Setup
 
-### 1. FFmpeg (Mandatory)
-PulseStream requires **ffmpeg.exe** and **ffprobe.exe** to be present in the root folder (as shown in the structure above) to handle YouTube audio conversion.
+### 1. Mandatory Binaries (FFmpeg)
+PulseStream requires **FFmpeg** to convert internet data into playable audio.
+*   Download the **Essentials Build** from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip).
+*   Place `ffmpeg.exe` and `ffprobe.exe` directly in the **root folder** of the project.
 
-### 2. Node.js (Highly Recommended)
-Install [Node.js](https://nodejs.org/) to allow the streaming engine to bypass YouTube's signature protection for faster and more reliable searching.
+### 2. JavaScript Runtime (Node.js)
+To bypass modern security signatures on streaming platforms and ensure fast results, [Node.js](https://nodejs.org/) should be installed on your system.
 
-### 3. Installation
-Install all required Python libraries via pip:
-```powershell
+### 3. Python Dependencies
+Install all required libraries via pip:
+```bash
 pip install customtkinter pygame yt-dlp shazamio pyaudio pillow pydub mutagen
+```
+
+---
+
+## 📂 Project Architecture
+
+```text
+PulseStream/
+│
+├── main.py                # Entry Point (Layout & Player Logic)
+├── ffmpeg.exe             # Media Conversion Binary
+├── ffprobe.exe            # Metadata Binary
+├── cache/                 # Temporary streaming storage
+│
+├── core/                  # Audio Engines
+│   ├── player.py          # Playback & Seeking wrapper
+│   └── recorder.py        # Microphone Recording logic
+│
+├── services/              # API & Network Services
+│   ├── searcher.py        # Streaming extraction service
+│   └── recognizer.py      # AI Song Identification service
+│
+├── ui/                    # Design Layer
+│   ├── components.py      # Modern Custom Widgets (Search, Rows, etc.)
+│   └── styles.py          # OLED Palette & Typography
+│
+└── utils/                 # Utilities
+    └── helpers.py         # Directory & File management
 ```
 
 ---
 
 ## 🎮 How to Use
 
-1.  **Run the App:** Execute `python main.py`.
-2.  **Search & Stream:** Type a song name in the top search bar and click the **Search** button. The track will appear in "Your Tracks."
-3.  **Local Files:** Click **📂 Library** in the sidebar to add files from your PC.
-4.  **Identify Music:** Click **🎙 Identify Song**. The app will listen for 7 seconds and display the result.
-5.  **Playback:** 
-    *   **Double-Click** or click a song row to play.
-    *   Use the **Floating Pill Player** to play/pause.
-    *   **Drag the slider** to rewind or skip to any part of the song.
-    *   **Right-Click** a track to move it to the top or bottom of the list.
-6.  **Download:** Click the **📥 icon** on any streamed track to save it permanently to your computer.
+1.  **Launch:** Run `python main.py`.
+2.  **Discover:** Type a song name and click the **Search** button.
+3.  **Identify:** Click **🎙 Identify Song**. Once a song is found, click **Yes** on the popup to start streaming it instantly.
+4.  **Manage:** 
+    *   **Double-Click** a track to play.
+    *   **Right-Click** to move tracks to the front/back of the list.
+    *   **Click 📥** to download a streamed song permanently.
+5.  **Seek:** Click or drag the progress bar above the play button to rewind or skip sections of the song.
 
 ---
 
 ## 🔧 Troubleshooting
 
-*   **Search/Stream Fails:** Update the extractor logic using `pip install -U yt-dlp`.
-*   **No Sound/Audio Lockup:** Ensure `ffmpeg.exe` is in the root folder and not blocked by antivirus.
-*   **Blue Highlight on Search:** PulseStream includes an "Anti-Focus" logic, but if it persists, simply click anywhere on the sidebar to clear the highlight.
+*   **UI Alignment:** PulseStream is optimized for a resolution of 1280x920. If elements appear overlapped, ensure Windows Display Scaling is at 100%.
+*   **Audio Engine Errors:** If audio fails to resume after a seek, the engine automatically resets the buffer using the `music.unload()` command.
+*   **Blue Highlight:** An internal "Focus Hijack" script removes the blue highlight from the search bar 500ms after the app starts.
 
 ---
 
 ## 📜 Disclaimer
-*PulseStream is developed for educational and personal use. Please respect copyright laws and the terms of service of content providers.*
-
-**© 2024 PulseStream | Developed by Nethru Randev**
+*This software is developed for personal and educational use. Users are responsible for complying with the terms of service of third-party platforms and local copyright laws.*
