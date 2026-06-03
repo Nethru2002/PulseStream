@@ -12,7 +12,7 @@ Designed with a modular architecture, PulseStream is built to be fast, responsiv
 *   **Next-Level Modern GUI:** A minimalist interface engineered with `CustomTkinter`, featuring a floating player bar, high-density track cards, and smooth hover animations.
 *   **Unified Search & Stream:** A redesigned search area featuring a dedicated **Search Button**. Search for any song or artist, and PulseStream will fetch and stream the high-quality audio instantly.
 *   **AI Song Identification:** Powered by the Shazam API. The tool listens through your microphone for 7 seconds to identify unknown tracks.
-*   **NEW: Instant Stream from ID:** After identifying a song, PulseStream prompts the user to stream the song immediately, bridging the gap between discovery and listening.
+*   **Instant Stream from ID:** After identifying a song, PulseStream prompts the user to stream the song immediately, bridging the gap between discovery and listening.
 *   **Advanced Playback Controls:**
     *   **Precise Seeking:** A smooth progress slider allows you to rewind or skip to any position in a track.
     *   **Dynamic Volume:** Real-time volume scaling optimized to prevent audio engine lockup.
