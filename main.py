@@ -19,7 +19,7 @@ ctk.set_appearance_mode("Dark")
 class PulseStreamApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("PulseStream Pro")
+        self.title("PulseStream")
         self.geometry("1280x920")
         self.configure(fg_color="#000000")
         ensure_dir("cache")
