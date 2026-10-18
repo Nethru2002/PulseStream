@@ -1,15 +1,7 @@
-import asyncio
+import os
 import wave
 import pyaudio
-import os
 from shazamio import Shazam
-from pydub import AudioSegment
-
-ffmpeg_path = os.path.join(os.getcwd(), "ffmpeg.exe")
-ffprobe_path = os.path.join(os.getcwd(), "ffprobe.exe")
-
-AudioSegment.converter = ffmpeg_path
-AudioSegment.ffprobe = ffprobe_path
 
 class SongRecognizer:
     def __init__(self):
@@ -17,19 +9,17 @@ class SongRecognizer:
         self.chunk = 1024
         self.format = pyaudio.paInt16
         self.channels = 1
-        self.rate = 41000
+        self.rate = 44100
         self.record_seconds = 7
 
     def record_audio(self, filename):
         p = pyaudio.PyAudio()
-        stream = p.open(format=self.format, channels=self.channels, 
+        stream = p.open(format=self.format, channels=self.channels,
                         rate=self.rate, input=True, frames_per_buffer=self.chunk)
-        
         frames = []
         for _ in range(0, int(self.rate / self.chunk * self.record_seconds)):
-            data = stream.read(self.chunk)
+            data = stream.read(self.chunk, exception_on_overflow=False)
             frames.append(data)
-        
         stream.stop_stream()
         stream.close()
         p.terminate()

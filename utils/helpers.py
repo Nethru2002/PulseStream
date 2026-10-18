@@ -1,17 +1,18 @@
 import os
+import re
 
 def format_time(seconds):
-    """Converts seconds to MM:SS format"""
-    minutes = int(seconds // 60)
-    seconds = int(seconds % 60)
-    return f"{minutes:02d}:{seconds:02d}"
+    try:
+        val = int(float(seconds))
+        minutes = val // 60
+        secs = val % 60
+        return f"{minutes:02d}:{secs:02d}"
+    except Exception:
+        return "00:00"
 
 def ensure_dir(directory):
-    """Creates a directory if it doesn't exist"""
     if not os.path.exists(directory):
-        os.makedirs(directory)
+        os.makedirs(directory, exist_ok=True)
 
-def get_resource_path(relative_path):
-    """Helper to find files relative to the project root"""
-    base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
+def sanitize_filename(name):
+    return re.sub(r'[\\/*?:"<>|]', "", name).strip()

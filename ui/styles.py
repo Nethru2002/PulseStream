@@ -1,7 +1,25 @@
 class AppStyles:
-    BG_SIDEBAR = "#000000"
-    BG_MAIN = "#121212"
-    BG_PLAYER = "#181818"
-    ACCENT = "#1DB954"
-    TEXT_MAIN = "#FFFFFF"
-    TEXT_DIM = "#B3B3B3"
+    BG_BASE = "#070709"
+    BG_SIDEBAR = "#0D0D11"
+    BG_CARD = "#131318"
+    BG_CARD_HOVER = "#1C1C24"
+    BG_SURFACE = "#181820"
+    BG_INPUT = "#1F1F2A"
+    BG_PLAYER = "#0B0B0F"
+    BG_DRAWER = "#0F0F14"
+
+    ACCENT = "#10B981"
+    ACCENT_HOVER = "#059669"
+    ACCENT_GLOW = "#064E3B"
+    SECONDARY = "#6366F1"
+    DANGER = "#F43F5E"
+
+    TEXT_WHITE = "#FFFFFF"
+    TEXT_HIGH = "#E2E8F0"
+    TEXT_MED = "#94A3B8"
+    TEXT_MUTED = "#64748B"
+
+    BORDER_SUBTLE = "#1E1E28"
+    BORDER_CARD = "#272736"
+
+    FONT = "Segoe UI"

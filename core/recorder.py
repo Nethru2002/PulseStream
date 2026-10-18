@@ -7,25 +7,25 @@ class AudioRecorder:
         self.sample_format = sample_format
         self.channels = channels
         self.rate = rate
-        self.p = pyaudio.PyAudio()
 
     def record(self, output_filename, seconds=7):
-        stream = self.p.open(format=self.sample_format,
-                             channels=self.channels,
-                             rate=self.rate,
-                             frames_per_buffer=self.chunk,
-                             input=True)
-
+        p = pyaudio.PyAudio()
+        stream = p.open(format=self.sample_format,
+                        channels=self.channels,
+                        rate=self.rate,
+                        frames_per_buffer=self.chunk,
+                        input=True)
         frames = []
-        for _ in range(0, int(self.rate / self.chunk * seconds)):
-            data = stream.read(self.chunk)
+        total_chunks = int(self.rate / self.chunk * seconds)
+        for _ in range(total_chunks):
+            data = stream.read(self.chunk, exception_on_overflow=False)
             frames.append(data)
-
         stream.stop_stream()
         stream.close()
+        p.terminate()
 
         with wave.open(output_filename, 'wb') as wf:
             wf.setnchannels(self.channels)
-            wf.setsampwidth(self.p.get_sample_size(self.sample_format))
+            wf.setsampwidth(p.get_sample_size(self.sample_format))
             wf.setframerate(self.rate)
             wf.writeframes(b''.join(frames))
