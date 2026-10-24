@@ -66,7 +66,7 @@ class PulseStreamStudio(ctk.CTk):
         self.grid_columnconfigure(1, weight=1)
         self.grid_columnconfigure(2, weight=0, minsize=320)
         self.grid_rowconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=0, minsize=100)
+        self.grid_rowconfigure(1, weight=0, minsize=92)
 
         self.sidebar = ctk.CTkFrame(
             self,
@@ -198,112 +198,226 @@ class PulseStreamStudio(ctk.CTk):
     def setup_bottom_player(self):
         self.dock = ctk.CTkFrame(
             self,
+            height=92,
             fg_color=AppStyles.BG_PLAYER,
             corner_radius=0,
             border_width=1,
             border_color=AppStyles.BORDER_SUBTLE
         )
         self.dock.grid(row=1, column=0, columnspan=3, sticky="nsew")
+        self.dock.pack_propagate(False)
 
-        self.seek_bar = ctk.CTkSlider(
-            self.dock,
-            from_=0,
-            to=100,
-            height=6,
-            progress_color=AppStyles.ACCENT,
-            fg_color="#21212B",
-            button_color=AppStyles.TEXT_WHITE,
-            button_hover_color=AppStyles.ACCENT,
-            command=self._on_slider_move
-        )
-        self.seek_bar.place(relx=0.5, rely=0.08, anchor="center", relwidth=1.0)
-        self.seek_bar.set(0)
-        self.seek_bar.bind("<Button-1>", lambda e: setattr(self, "is_seeking", True))
-        self.seek_bar.bind("<ButtonRelease-1>", self._on_slider_release)
-
-        deck = ctk.CTkFrame(self.dock, fg_color="transparent")
-        deck.pack(fill="both", expand=True, padx=24, pady=(12, 4))
-
-        left_side = ctk.CTkFrame(deck, fg_color="transparent", width=340)
-        left_side.pack(side="left", fill="y")
-        left_side.pack_propagate(False)
+        left_pane = ctk.CTkFrame(self.dock, fg_color="transparent", width=320)
+        left_pane.pack(side="left", fill="y", padx=(18, 0))
+        left_pane.pack_propagate(False)
 
         self.dock_art = ctk.CTkLabel(
-            left_side,
+            left_pane,
             text="",
             image=create_rounded_cover("", size=(52, 52), radius=10),
             width=52,
             height=52
         )
-        self.dock_art.pack(side="left", padx=(0, 12))
+        self.dock_art.pack(side="left", pady=20)
 
-        meta = ctk.CTkFrame(left_side, fg_color="transparent")
-        meta.pack(side="left", fill="both", expand=True, pady=6)
-        self.dock_title_lbl = ctk.CTkLabel(meta, text="PulseStream Ready", font=(AppStyles.FONT, 13, "bold"),
-                                           text_color=AppStyles.TEXT_WHITE, anchor="w")
+        meta_box = ctk.CTkFrame(left_pane, fg_color="transparent")
+        meta_box.pack(side="left", fill="both", expand=True, padx=(12, 6), pady=22)
+
+        self.dock_title_lbl = ctk.CTkLabel(
+            meta_box,
+            text="PulseStream Ready",
+            font=(AppStyles.FONT, 13, "bold"),
+            text_color=AppStyles.TEXT_WHITE,
+            anchor="w"
+        )
         self.dock_title_lbl.pack(fill="x")
-        self.dock_sub_lbl = ctk.CTkLabel(meta, text="Select track to listen", font=(AppStyles.FONT, 11),
-                                         text_color=AppStyles.TEXT_MUTED, anchor="w")
+
+        self.dock_sub_lbl = ctk.CTkLabel(
+            meta_box,
+            text="Select track to listen",
+            font=(AppStyles.FONT, 11),
+            text_color=AppStyles.TEXT_MUTED,
+            anchor="w"
+        )
         self.dock_sub_lbl.pack(fill="x")
 
-        center_side = ctk.CTkFrame(deck, fg_color="transparent")
-        center_side.place(relx=0.5, rely=0.52, anchor="center")
+        self.dock_fav_btn = ctk.CTkButton(
+            left_pane,
+            text="♡",
+            width=32,
+            height=32,
+            corner_radius=16,
+            fg_color="transparent",
+            hover_color=AppStyles.BG_CARD_HOVER,
+            text_color=AppStyles.TEXT_MUTED,
+            font=(AppStyles.FONT, 16),
+            command=self._on_dock_fav_toggle
+        )
+        self.dock_fav_btn.pack(side="left", padx=4)
+
+        right_pane = ctk.CTkFrame(self.dock, fg_color="transparent", width=300)
+        right_pane.pack(side="right", fill="y", padx=(0, 20))
+        right_pane.pack_propagate(False)
+
+        self.visualizer = AnimatedVisualizer(right_pane, width=76, height=24, bar_count=6)
+        self.visualizer.pack(side="left", padx=(8, 14), pady=34)
+
+        ctk.CTkButton(
+            right_pane,
+            text="◨",
+            width=30,
+            height=30,
+            corner_radius=15,
+            fg_color="transparent",
+            hover_color=AppStyles.BG_CARD_HOVER,
+            text_color=AppStyles.TEXT_MED,
+            font=(AppStyles.FONT, 14),
+            command=self.toggle_drawer
+        ).pack(side="left", padx=4)
+
+        ctk.CTkLabel(
+            right_pane,
+            text="🔊",
+            font=(AppStyles.FONT, 12),
+            text_color=AppStyles.TEXT_MUTED
+        ).pack(side="left", padx=(10, 4))
+
+        self.vol_slider = ctk.CTkSlider(
+            right_pane,
+            width=92,
+            height=6,
+            progress_color=AppStyles.ACCENT,
+            fg_color="#272733",
+            button_color=AppStyles.TEXT_WHITE,
+            button_hover_color=AppStyles.ACCENT,
+            button_length=10,
+            button_corner_radius=5,
+            command=self.player.set_volume
+        )
+        self.vol_slider.pack(side="left", padx=4)
+        self.vol_slider.set(0.8)
+
+        center_pane = ctk.CTkFrame(self.dock, fg_color="transparent")
+        center_pane.pack(side="left", fill="both", expand=True, padx=16)
+
+        button_row = ctk.CTkFrame(center_pane, fg_color="transparent")
+        button_row.pack(side="top", pady=(12, 2))
 
         self.shuf_btn = ctk.CTkButton(
-            center_side, text="🔀", width=32, height=32, corner_radius=16,
-            fg_color="transparent", hover_color=AppStyles.BG_CARD_HOVER,
-            text_color=AppStyles.TEXT_MUTED, font=(AppStyles.FONT, 13),
+            button_row,
+            text="🔀",
+            width=32,
+            height=32,
+            corner_radius=16,
+            fg_color="transparent",
+            hover_color=AppStyles.BG_CARD_HOVER,
+            text_color=AppStyles.TEXT_MUTED,
+            font=(AppStyles.FONT, 13),
             command=self.toggle_shuffle
         )
         self.shuf_btn.pack(side="left", padx=6)
 
         ctk.CTkButton(
-            center_side, text="⏮", width=36, height=36, corner_radius=18,
-            fg_color="transparent", hover_color=AppStyles.BG_CARD_HOVER,
-            text_color=AppStyles.TEXT_WHITE, font=(AppStyles.FONT, 16),
+            button_row,
+            text="⏮",
+            width=36,
+            height=36,
+            corner_radius=18,
+            fg_color="transparent",
+            hover_color=AppStyles.BG_CARD_HOVER,
+            text_color=AppStyles.TEXT_WHITE,
+            font=(AppStyles.FONT, 16),
             command=self.prev_track
         ).pack(side="left", padx=4)
 
         self.main_play_btn = ctk.CTkButton(
-            center_side, text="▶", width=46, height=46, corner_radius=23,
-            fg_color=AppStyles.TEXT_WHITE, text_color="#000000",
-            hover_color=AppStyles.ACCENT, font=(AppStyles.FONT, 16, "bold"),
+            button_row,
+            text="▶",
+            width=40,
+            height=40,
+            corner_radius=20,
+            fg_color=AppStyles.TEXT_WHITE,
+            text_color="#000000",
+            hover_color=AppStyles.ACCENT,
+            font=(AppStyles.FONT, 15, "bold"),
             command=self.toggle_play_state
         )
         self.main_play_btn.pack(side="left", padx=10)
 
         ctk.CTkButton(
-            center_side, text="⏭", width=36, height=36, corner_radius=18,
-            fg_color="transparent", hover_color=AppStyles.BG_CARD_HOVER,
-            text_color=AppStyles.TEXT_WHITE, font=(AppStyles.FONT, 16),
+            button_row,
+            text="⏭",
+            width=36,
+            height=36,
+            corner_radius=18,
+            fg_color="transparent",
+            hover_color=AppStyles.BG_CARD_HOVER,
+            text_color=AppStyles.TEXT_WHITE,
+            font=(AppStyles.FONT, 16),
             command=self.next_track
         ).pack(side="left", padx=4)
 
         self.rep_btn = ctk.CTkButton(
-            center_side, text="🔁", width=32, height=32, corner_radius=16,
-            fg_color="transparent", hover_color=AppStyles.BG_CARD_HOVER,
-            text_color=AppStyles.TEXT_MUTED, font=(AppStyles.FONT, 13),
+            button_row,
+            text="🔁",
+            width=32,
+            height=32,
+            corner_radius=16,
+            fg_color="transparent",
+            hover_color=AppStyles.BG_CARD_HOVER,
+            text_color=AppStyles.TEXT_MUTED,
+            font=(AppStyles.FONT, 13),
             command=self.toggle_repeat
         )
         self.rep_btn.pack(side="left", padx=6)
 
-        right_side = ctk.CTkFrame(deck, fg_color="transparent")
-        right_side.pack(side="right", fill="y")
+        timeline_row = ctk.CTkFrame(center_pane, fg_color="transparent")
+        timeline_row.pack(side="top", fill="x", padx=20, pady=(2, 6))
 
-        self.visualizer = AnimatedVisualizer(right_side, width=90, height=28, bar_count=6)
-        self.visualizer.pack(side="left", padx=16, pady=10)
-
-        self.dock_time_lbl = ctk.CTkLabel(right_side, text="00:00 / 00:00", font=(AppStyles.FONT, 11),
-                                          text_color=AppStyles.TEXT_MUTED)
-        self.dock_time_lbl.pack(side="left", padx=10)
-
-        ctk.CTkLabel(right_side, text="🔊", font=(AppStyles.FONT, 11)).pack(side="left", padx=(4, 2))
-        self.vol_slider = ctk.CTkSlider(
-            right_side, width=88, height=8, progress_color=AppStyles.ACCENT,
-            fg_color="#272733", command=self.player.set_volume
+        self.elapsed_lbl = ctk.CTkLabel(
+            timeline_row,
+            text="00:00",
+            font=(AppStyles.FONT, 11),
+            text_color=AppStyles.TEXT_MUTED,
+            width=36
         )
-        self.vol_slider.pack(side="left", padx=(2, 6))
-        self.vol_slider.set(0.8)
+        self.elapsed_lbl.pack(side="left", padx=(0, 8))
+
+        self.seek_bar = ctk.CTkSlider(
+            timeline_row,
+            from_=0,
+            to=100,
+            height=5,
+            progress_color=AppStyles.ACCENT,
+            fg_color="#262633",
+            button_color=AppStyles.TEXT_WHITE,
+            button_hover_color=AppStyles.ACCENT,
+            button_length=10,
+            button_corner_radius=5,
+            command=self._on_slider_move
+        )
+        self.seek_bar.pack(side="left", fill="x", expand=True)
+        self.seek_bar.set(0)
+        self.seek_bar.bind("<Button-1>", lambda e: setattr(self, "is_seeking", True))
+        self.seek_bar.bind("<ButtonRelease-1>", self._on_slider_release)
+
+        self.duration_lbl = ctk.CTkLabel(
+            timeline_row,
+            text="00:00",
+            font=(AppStyles.FONT, 11),
+            text_color=AppStyles.TEXT_MUTED,
+            width=36
+        )
+        self.duration_lbl.pack(side="left", padx=(8, 0))
+
+    def _on_dock_fav_toggle(self):
+        if not self.current_track:
+            return
+        is_now_fav = self.toggle_favorite(self.current_track)
+        self.dock_fav_btn.configure(
+            text="♥" if is_now_fav else "♡",
+            text_color=AppStyles.DANGER if is_now_fav else AppStyles.TEXT_MUTED
+        )
 
     def toggle_drawer(self):
         if self.is_drawer_visible:
@@ -382,6 +496,21 @@ class PulseStreamStudio(ctk.CTk):
         query = self.search_bar.get()
         if not query:
             return
+        is_url = str(query).startswith("http://") or str(query).startswith("https://")
+
+        if is_url:
+            cached_instant = self.searcher.get_cached_path({"url": query})
+            if cached_instant and os.path.exists(cached_instant) and os.path.getsize(cached_instant) > 50000:
+                fast_track = {
+                    "title": os.path.splitext(os.path.basename(cached_instant))[0],
+                    "artist": "Cached Stream",
+                    "path": cached_instant,
+                    "url": query,
+                    "source": "STREAM"
+                }
+                self.request_playback(fast_track)
+                return
+
         self.search_bar.set_state("disabled")
         for w in self.track_scroll.winfo_children():
             w.destroy()
@@ -411,30 +540,41 @@ class PulseStreamStudio(ctk.CTk):
                 self.hero.update_hero(results[0])
                 for idx, r in enumerate(results, start=1):
                     self.create_row(idx, r)
+
+                if is_url and results:
+                    self.request_playback(results[0])
+
             self.after(0, update)
         threading.Thread(target=worker, daemon=True).start()
 
     def request_playback(self, track_data):
         if not track_data:
             return
-        local_path = track_data.get("path", "")
-        if track_data.get("source") == "STREAM" and (not local_path or not os.path.exists(local_path) or local_path.startswith("http")):
-            self.dock_title_lbl.configure(text=f"Streaming: {track_data['title'][:24]}...")
-            def dl_worker():
-                try:
-                    resolved = self.searcher.download_track(track_data)
-                    track_data["path"] = resolved["path"]
-                    track_data["thumbnail"] = resolved["thumbnail"]
-                    self.after(0, lambda: self._execute_play(resolved))
-                except Exception as ex:
-                    raw_msg = str(ex)
-                    clean_msg = re.sub(r'\x1b\[[0-9;]*m', '', raw_msg).strip()
-                    if not clean_msg:
-                        clean_msg = "Stream extraction failed. Please check internet connection."
-                    self.after(0, lambda: messagebox.showerror("Stream Error", clean_msg))
-            threading.Thread(target=dl_worker, daemon=True).start()
-        else:
+
+        cached_hit = self.searcher.get_cached_path(track_data)
+        if cached_hit and os.path.exists(cached_hit) and os.path.getsize(cached_hit) > 50000:
+            track_data["path"] = cached_hit
             self._execute_play(track_data)
+            return
+
+        self.dock_title_lbl.configure(text=f"Buffering: {track_data.get('title', 'Track')[:22]}...")
+        def dl_worker():
+            try:
+                def on_prog(txt):
+                    self.after(0, lambda: self.dock_title_lbl.configure(text=txt))
+
+                resolved = self.searcher.download_track(track_data, on_progress=on_prog)
+                track_data["path"] = resolved["path"]
+                track_data["url"] = resolved.get("url", track_data.get("url", ""))
+                track_data["thumbnail"] = resolved["thumbnail"]
+                self.after(0, lambda: self._execute_play(resolved))
+            except Exception as ex:
+                raw_msg = str(ex)
+                clean_msg = re.sub(r'\x1b\[[0-9;]*m', '', raw_msg).strip()
+                if not clean_msg:
+                    clean_msg = "Stream extraction failed. Please check internet connection."
+                self.after(0, lambda: messagebox.showerror("Stream Error", clean_msg))
+        threading.Thread(target=dl_worker, daemon=True).start()
 
     def _execute_play(self, track_data):
         if not track_data or not isinstance(track_data, dict):
@@ -459,12 +599,13 @@ class PulseStreamStudio(ctk.CTk):
         self.current_duration = dur
 
         self.db.add_or_update_track(
-            title=track_data["title"],
-            artist=track_data["artist"],
+            title=track_data.get("title", "Unknown"),
+            artist=track_data.get("artist", "Unknown"),
             duration=dur,
             path=fp,
             thumbnail=track_data.get("thumbnail", ""),
-            source=track_data.get("source", "LOCAL")
+            source=track_data.get("source", "LOCAL"),
+            url=track_data.get("url", "")
         )
         self.db.record_play(fp)
 
@@ -473,15 +614,23 @@ class PulseStreamStudio(ctk.CTk):
             self.main_play_btn.configure(text="⏸")
             self.seek_bar.configure(to=dur)
             self.seek_bar.set(0)
+            self.elapsed_lbl.configure(text="00:00")
+            self.duration_lbl.configure(text=format_time(dur))
             self.visualizer.set_playing(True)
 
-            self.dock_title_lbl.configure(text=track_data["title"][:26])
-            self.dock_sub_lbl.configure(text=track_data["artist"][:24])
+            self.dock_title_lbl.configure(text=track_data.get("title", "Unknown")[:26])
+            self.dock_sub_lbl.configure(text=track_data.get("artist", "Unknown")[:24])
             cover_img = create_rounded_cover(track_data.get("thumbnail", ""), size=(52, 52), radius=10)
             self.dock_art.configure(image=cover_img)
 
-            self.drawer_title.configure(text=track_data["title"][:30])
-            self.drawer_artist.configure(text=track_data["artist"][:26])
+            is_fav = self.db.is_favorite(fp)
+            self.dock_fav_btn.configure(
+                text="♥" if is_fav else "♡",
+                text_color=AppStyles.DANGER if is_fav else AppStyles.TEXT_MUTED
+            )
+
+            self.drawer_title.configure(text=track_data.get("title", "Unknown")[:30])
+            self.drawer_artist.configure(text=track_data.get("artist", "Unknown")[:26])
             drawer_img = create_rounded_cover(track_data.get("thumbnail", ""), size=(260, 260), radius=16)
             self.drawer_art_box.configure(image=drawer_img)
 
@@ -563,7 +712,7 @@ class PulseStreamStudio(ctk.CTk):
 
     def add_to_queue(self, track_data):
         self.queue.append(track_data)
-        messagebox.showinfo("Queue", f"Track '{track_data['title'][:25]}' enqueued.")
+        messagebox.showinfo("Queue", f"Track '{track_data.get('title', 'Track')[:25]}' enqueued.")
 
     def delete_track(self, track_data):
         if track_data == self.current_track:
@@ -581,7 +730,7 @@ class PulseStreamStudio(ctk.CTk):
             messagebox.showwarning("PulseStream", "Audio must be fully buffered before saving.")
             return
         ext = os.path.splitext(src)[1] or ".mp3"
-        safe = sanitize_filename(track_data["title"])
+        safe = sanitize_filename(track_data.get("title", "track"))
         dest = filedialog.asksaveasfilename(defaultextension=ext, initialfile=f"{safe}{ext}")
         if dest:
             shutil.copyfile(src, dest)
@@ -635,7 +784,7 @@ class PulseStreamStudio(ctk.CTk):
     def load_lyrics_for_current(self):
         if not self.current_track:
             return
-        t = self.current_track["title"]
+        t = self.current_track.get("title", "")
         a = self.current_track.get("artist", "")
         d = self.current_track.get("duration", 0)
         def worker():
@@ -705,7 +854,8 @@ class PulseStreamStudio(ctk.CTk):
         if self.player.is_active() and not self.is_seeking:
             pos = self.player.get_pos()
             self.seek_bar.set(pos)
-            self.dock_time_lbl.configure(text=f"{format_time(pos)} / {format_time(self.current_duration)}")
+            self.elapsed_lbl.configure(text=format_time(pos))
+            self.duration_lbl.configure(text=format_time(self.current_duration))
             self.visualizer.update_bars()
             self.sync_live_lyrics(pos)
 
