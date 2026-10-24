@@ -207,7 +207,7 @@ class SidebarNavButton(ctk.CTkButton):
             hover_color=AppStyles.BG_CARD_HOVER,
             anchor="w",
             font=(AppStyles.FONT, 13, "bold" if is_active else "normal"),
-            height=42,
+            height=38,
             corner_radius=10,
             border_width=1 if is_active else 0,
             border_color=AppStyles.BORDER_CARD,
@@ -279,6 +279,29 @@ class TrackTableRow(ctk.CTkFrame):
         a_lbl.pack(fill="x")
         a_lbl.bind("<Button-1>", lambda e: self.play_cmd(self.data))
 
+        self.menu = Menu(self, tearoff=0, bg=AppStyles.BG_CARD, fg="white",
+                         activebackground=AppStyles.ACCENT, activeforeground="black",
+                         relief="flat", bd=0)
+        self.menu.add_command(label="Play Now", command=lambda: self.play_cmd(self.data))
+        self.menu.add_command(label="Play Next", command=lambda: self.winfo_toplevel().add_to_queue(self.data))
+        self.menu.add_command(label="Add to Playlist...", command=lambda: self.winfo_toplevel().prompt_add_to_playlist(self.data))
+        self.menu.add_separator()
+        self.menu.add_command(label="Delete / Remove", command=lambda: self.del_cmd(self.data))
+
+        self.opt_btn = ctk.CTkButton(
+            self,
+            text="⋮",
+            width=28,
+            height=28,
+            corner_radius=14,
+            fg_color="transparent",
+            hover_color=AppStyles.BG_INPUT,
+            text_color=AppStyles.TEXT_MED,
+            font=(AppStyles.FONT, 16, "bold"),
+            command=self._show_menu_from_btn
+        )
+        self.opt_btn.pack(side="right", padx=(2, 10))
+
         src_badge = ctk.CTkLabel(
             self,
             text=data.get("source", "LOCAL"),
@@ -289,7 +312,7 @@ class TrackTableRow(ctk.CTkFrame):
             width=58,
             height=20
         )
-        src_badge.pack(side="right", padx=12)
+        src_badge.pack(side="right", padx=6)
 
         dur_lbl = ctk.CTkLabel(
             self,
@@ -298,7 +321,7 @@ class TrackTableRow(ctk.CTkFrame):
             text_color=AppStyles.TEXT_MED,
             width=48
         )
-        dur_lbl.pack(side="right", padx=8)
+        dur_lbl.pack(side="right", padx=6)
 
         if data.get("source") == "STREAM":
             dl_btn = ctk.CTkButton(
@@ -343,13 +366,16 @@ class TrackTableRow(ctk.CTkFrame):
         )
         play_act.pack(side="right", padx=6)
 
-        self.menu = Menu(self, tearoff=0, bg=AppStyles.BG_CARD, fg="white",
-                         activebackground=AppStyles.ACCENT, activeforeground="black",
-                         relief="flat", bd=0)
-        self.menu.add_command(label="Play Next", command=lambda: self.master.master.master.add_to_queue(self.data))
-        self.menu.add_separator()
-        self.menu.add_command(label="Delete / Remove", command=lambda: self.del_cmd(self.data))
-        self.bind("<Button-3>", lambda e: self.menu.post(e.x_root, e.y_root))
+        def post_menu(evt):
+            self.menu.post(evt.x_root, evt.y_root)
+
+        for w in (self, info_box, t_lbl, a_lbl, self.art_box, idx_lbl, dur_lbl, src_badge):
+            w.bind("<Button-3>", post_menu)
+
+    def _show_menu_from_btn(self):
+        x = self.opt_btn.winfo_rootx()
+        y = self.opt_btn.winfo_rooty() + self.opt_btn.winfo_height()
+        self.menu.post(x, y)
 
     def _on_fav_toggle(self):
         new_val = self.fav_cmd(self.data)

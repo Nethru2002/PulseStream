@@ -43,6 +43,24 @@ class DatabaseManager:
                     played_at REAL
                 )
             """)
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS playlists (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL,
+                    created_at REAL
+                )
+            """)
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS playlist_tracks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    playlist_id INTEGER NOT NULL,
+                    track_id INTEGER NOT NULL,
+                    added_at REAL,
+                    UNIQUE(playlist_id, track_id)
+                )
+            """)
             conn.commit()
 
     def _cleanup_duplicates(self):
@@ -99,6 +117,95 @@ class DatabaseManager:
                     t.get("created_at", time.time())
                 ))
             conn.commit()
+
+    def create_playlist(self, name):
+        clean_name = str(name).strip()
+        if not clean_name:
+            return None
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute("INSERT INTO playlists (name, created_at) VALUES (?, ?)", (clean_name, time.time()))
+                conn.commit()
+                return cursor.lastrowid
+            except sqlite3.IntegrityError:
+                return None
+
+    def get_playlists(self):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM playlists ORDER BY created_at ASC")
+            return [dict(r) for r in cursor.fetchall()]
+
+    def delete_playlist(self, playlist_id):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM playlist_tracks WHERE playlist_id = ?", (playlist_id,))
+            cursor.execute("DELETE FROM playlists WHERE id = ?", (playlist_id,))
+            conn.commit()
+
+    def add_track_to_playlist(self, playlist_id, track_data):
+        title = str(track_data.get("title", "Unknown")).strip()
+        artist = str(track_data.get("artist", "Unknown")).strip()
+        path = str(track_data.get("path") or track_data.get("url") or "")
+        url = str(track_data.get("url") or "")
+        dur = float(track_data.get("duration", 0) or 0)
+        thumb = str(track_data.get("thumbnail") or "")
+        source = str(track_data.get("source") or "STREAM")
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id FROM tracks 
+                WHERE path = ? 
+                   OR (url != '' AND url = ?) 
+                   OR (LOWER(title) = LOWER(?) AND LOWER(artist) = LOWER(?))
+                LIMIT 1
+            """, (path, url, title, artist))
+            row = cursor.fetchone()
+
+            if row:
+                t_id = row["id"]
+            else:
+                cursor.execute("""
+                    INSERT INTO tracks (title, artist, duration, path, thumbnail, source, url, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (title, artist, dur, path, thumb, source, url, time.time()))
+                t_id = cursor.lastrowid
+
+            try:
+                cursor.execute("""
+                    INSERT INTO playlist_tracks (playlist_id, track_id, added_at)
+                    VALUES (?, ?, ?)
+                """, (playlist_id, t_id, time.time()))
+                conn.commit()
+                return True
+            except sqlite3.IntegrityError:
+                return False
+
+    def remove_track_from_playlist(self, playlist_id, track_id):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?", (playlist_id, track_id))
+            conn.commit()
+
+    def get_playlist_tracks(self, playlist_id):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT t.* FROM tracks t
+                JOIN playlist_tracks pt ON t.id = pt.track_id
+                WHERE pt.playlist_id = ?
+                ORDER BY pt.added_at DESC
+            """, (playlist_id,))
+            return [dict(r) for r in cursor.fetchall()]
+
+    def get_playlist_by_id(self, playlist_id):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM playlists WHERE id = ?", (playlist_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
 
     def add_or_update_track(self, title, artist, duration, path, thumbnail="", source="LOCAL", url=""):
         with self._get_connection() as conn:

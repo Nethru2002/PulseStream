@@ -58,6 +58,7 @@ class PulseStreamStudio(ctk.CTk):
         self.is_drawer_visible = True
 
         self.setup_layout()
+        self.refresh_sidebar_playlists()
         self.navigate("EXPLORE")
         self.start_main_clock()
 
@@ -68,18 +69,20 @@ class PulseStreamStudio(ctk.CTk):
         self.grid_rowconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=0, minsize=92)
 
-        self.sidebar = ctk.CTkFrame(
+        self.sidebar = ctk.CTkScrollableFrame(
             self,
+            width=240,
             fg_color=AppStyles.BG_SIDEBAR,
             corner_radius=0,
             border_width=1,
-            border_color=AppStyles.BORDER_SUBTLE
+            border_color=AppStyles.BORDER_SUBTLE,
+            scrollbar_button_color="#1E1E28",
+            scrollbar_button_hover_color=AppStyles.ACCENT
         )
         self.sidebar.grid(row=0, column=0, sticky="nsew")
-        self.sidebar.grid_propagate(False)
 
         brand_wrap = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        brand_wrap.pack(fill="x", padx=20, pady=(28, 24))
+        brand_wrap.pack(fill="x", padx=16, pady=(18, 16))
         ctk.CTkLabel(
             brand_wrap,
             text="⚡ PULSE",
@@ -102,22 +105,50 @@ class PulseStreamStudio(ctk.CTk):
         ]
         for key, name, icon in routes:
             btn = SidebarNavButton(self.sidebar, name, icon, command=lambda k=key: self.navigate(k))
-            btn.pack(fill="x", padx=14, pady=3)
+            btn.pack(fill="x", padx=8, pady=2)
             self.nav_btns[key] = btn
 
         sep = ctk.CTkFrame(self.sidebar, height=1, fg_color=AppStyles.BORDER_SUBTLE)
-        sep.pack(fill="x", padx=18, pady=18)
+        sep.pack(fill="x", padx=12, pady=12)
+
+        pl_header = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        pl_header.pack(fill="x", padx=14, pady=(0, 4))
+        ctk.CTkLabel(
+            pl_header,
+            text="PLAYLISTS",
+            font=(AppStyles.FONT, 10, "bold"),
+            text_color=AppStyles.TEXT_MUTED
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            pl_header,
+            text="＋",
+            width=24,
+            height=24,
+            corner_radius=12,
+            fg_color="transparent",
+            hover_color=AppStyles.BG_CARD_HOVER,
+            text_color=AppStyles.ACCENT,
+            font=(AppStyles.FONT, 14, "bold"),
+            command=self.create_playlist_dialog
+        ).pack(side="right")
+
+        self.playlist_container = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        self.playlist_container.pack(fill="x", padx=4, pady=(0, 4))
+
+        sep2 = ctk.CTkFrame(self.sidebar, height=1, fg_color=AppStyles.BORDER_SUBTLE)
+        sep2.pack(fill="x", padx=12, pady=10)
 
         ctk.CTkLabel(
             self.sidebar,
             text="STUDIO SUITE",
             font=(AppStyles.FONT, 10, "bold"),
             text_color=AppStyles.TEXT_MUTED
-        ).pack(anchor="w", padx=22, pady=(0, 8))
+        ).pack(anchor="w", padx=16, pady=(0, 4))
 
-        SidebarNavButton(self.sidebar, "AI Shazam Match", "🎙", self.identify_song_workflow).pack(fill="x", padx=14, pady=3)
-        SidebarNavButton(self.sidebar, "Import Audio File", "📂", self.import_local_tracks).pack(fill="x", padx=14, pady=3)
-        SidebarNavButton(self.sidebar, "Toggle Right Stage", "◨", self.toggle_drawer).pack(fill="x", padx=14, pady=3)
+        SidebarNavButton(self.sidebar, "AI Shazam Match", "🎙", self.identify_song_workflow).pack(fill="x", padx=8, pady=2)
+        SidebarNavButton(self.sidebar, "Import Audio File", "📂", self.import_local_tracks).pack(fill="x", padx=8, pady=2)
+        SidebarNavButton(self.sidebar, "Toggle Right Stage", "◨", self.toggle_drawer).pack(fill="x", padx=8, pady=2)
 
         self.center_stage = ctk.CTkFrame(self, fg_color=AppStyles.BG_BASE, corner_radius=0)
         self.center_stage.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
@@ -410,6 +441,92 @@ class PulseStreamStudio(ctk.CTk):
         )
         self.duration_lbl.pack(side="left", padx=(8, 0))
 
+    def refresh_sidebar_playlists(self):
+        for w in self.playlist_container.winfo_children():
+            w.destroy()
+        playlists = self.db.get_playlists()
+        for pl in playlists:
+            pid = pl["id"]
+            pname = pl["name"]
+            is_act = self.current_tab == f"PLAYLIST_{pid}"
+            btn = SidebarNavButton(
+                self.playlist_container,
+                pname[:18],
+                "🎵",
+                command=lambda p=pid: self.navigate(f"PLAYLIST_{p}"),
+                is_active=is_act
+            )
+            btn.pack(fill="x", padx=4, pady=1)
+
+    def create_playlist_dialog(self):
+        dialog = ctk.CTkInputDialog(text="Enter playlist title:", title="New Playlist")
+        name = dialog.get_input()
+        if name and name.strip():
+            pid = self.db.create_playlist(name.strip())
+            if pid:
+                self.refresh_sidebar_playlists()
+                self.navigate(f"PLAYLIST_{pid}")
+            else:
+                messagebox.showwarning("Playlists", "A playlist with this name already exists.")
+
+    def prompt_add_to_playlist(self, track_data):
+        playlists = self.db.get_playlists()
+        if not playlists:
+            if messagebox.askyesno("No Playlists", "You have not created any playlists yet. Would you like to create one now?"):
+                self.create_playlist_dialog()
+            return
+
+        picker = ctk.CTkToplevel(self)
+        picker.title("Add to Playlist")
+        picker.geometry("380x440")
+        picker.configure(fg_color=AppStyles.BG_SURFACE)
+        picker.transient(self)
+        picker.grab_set()
+
+        ctk.CTkLabel(
+            picker,
+            text="Add to Playlist",
+            font=(AppStyles.FONT, 16, "bold"),
+            text_color=AppStyles.TEXT_WHITE
+        ).pack(pady=(18, 4))
+
+        ctk.CTkLabel(
+            picker,
+            text=f"Song: {track_data.get('title', 'Unknown')[:35]}",
+            font=(AppStyles.FONT, 12),
+            text_color=AppStyles.TEXT_MUTED
+        ).pack(pady=(0, 14))
+
+        scroll = ctk.CTkScrollableFrame(picker, fg_color=AppStyles.BG_BASE, corner_radius=12)
+        scroll.pack(fill="both", expand=True, padx=20, pady=(0, 14))
+
+        for pl in playlists:
+            pid = pl["id"]
+            pname = pl["name"]
+            p_btn = ctk.CTkButton(
+                scroll,
+                text=f"  🎵   {pname}",
+                anchor="w",
+                fg_color=AppStyles.BG_CARD,
+                hover_color=AppStyles.BG_CARD_HOVER,
+                text_color=AppStyles.TEXT_WHITE,
+                font=(AppStyles.FONT, 13),
+                height=38,
+                corner_radius=8,
+                command=lambda target_pid=pid, win=picker: self._execute_add_to_playlist(target_pid, track_data, win)
+            )
+            p_btn.pack(fill="x", pady=3)
+
+    def _execute_add_to_playlist(self, playlist_id, track_data, picker_window):
+        ok = self.db.add_track_to_playlist(playlist_id, track_data)
+        picker_window.destroy()
+        if ok:
+            messagebox.showinfo("Playlist", "Track added successfully.")
+            if self.current_tab == f"PLAYLIST_{playlist_id}":
+                self.navigate(self.current_tab)
+        else:
+            messagebox.showinfo("Playlist", "Track is already in this playlist.")
+
     def _on_dock_fav_toggle(self):
         if not self.current_track:
             return
@@ -437,6 +554,9 @@ class PulseStreamStudio(ctk.CTk):
                 text_color=AppStyles.TEXT_WHITE if key == tab else AppStyles.TEXT_MED,
                 border_width=1 if key == tab else 0
             )
+
+        self.refresh_sidebar_playlists()
+
         if tab == "EXPLORE":
             self.render_explore()
         elif tab == "FAVORITES":
@@ -445,6 +565,71 @@ class PulseStreamStudio(ctk.CTk):
             self.render_list(self.db.get_all_saved(), "Saved Offline Collection")
         elif tab == "HISTORY":
             self.render_list(self.db.get_history(), "Recent Playback Log")
+        elif tab.startswith("PLAYLIST_"):
+            pid = int(tab.split("_")[1])
+            self.render_playlist_view(pid)
+
+    def render_playlist_view(self, playlist_id):
+        for w in self.track_scroll.winfo_children():
+            w.destroy()
+
+        pl_info = self.db.get_playlist_by_id(playlist_id)
+        if not pl_info:
+            self.navigate("EXPLORE")
+            return
+
+        tracks = self.db.get_playlist_tracks(playlist_id)
+
+        header_box = ctk.CTkFrame(self.track_scroll, fg_color="transparent")
+        header_box.pack(fill="x", pady=(0, 10))
+
+        title_area = ctk.CTkFrame(header_box, fg_color="transparent")
+        title_area.pack(side="left")
+
+        ctk.CTkLabel(
+            title_area,
+            text=f"PLAYLIST: {pl_info['name']}",
+            font=(AppStyles.FONT, 18, "bold"),
+            text_color=AppStyles.TEXT_WHITE
+        ).pack(anchor="w")
+
+        ctk.CTkLabel(
+            title_area,
+            text=f"{len(tracks)} songs in collection",
+            font=(AppStyles.FONT, 12),
+            text_color=AppStyles.TEXT_MUTED
+        ).pack(anchor="w")
+
+        ctk.CTkButton(
+            header_box,
+            text="🗑 Delete Playlist",
+            width=120,
+            height=30,
+            corner_radius=8,
+            fg_color=AppStyles.BG_CARD,
+            hover_color=AppStyles.DANGER,
+            text_color=AppStyles.TEXT_WHITE,
+            font=(AppStyles.FONT, 12),
+            command=lambda: self.confirm_delete_playlist(playlist_id, pl_info["name"])
+        ).pack(side="right")
+
+        if tracks:
+            self.hero.update_hero(tracks[0])
+            for idx, item in enumerate(tracks, start=1):
+                self.create_row(idx, item)
+        else:
+            ctk.CTkLabel(
+                self.track_scroll,
+                text="This playlist is empty. Right-click any song and select 'Add to Playlist...' to add tracks.",
+                font=(AppStyles.FONT, 13),
+                text_color=AppStyles.TEXT_MUTED
+            ).pack(pady=50)
+
+    def confirm_delete_playlist(self, playlist_id, name):
+        if messagebox.askyesno("Delete Playlist", f"Are you sure you want to delete '{name}'?"):
+            self.db.delete_playlist(playlist_id)
+            self.refresh_sidebar_playlists()
+            self.navigate("EXPLORE")
 
     def render_explore(self):
         for w in self.track_scroll.winfo_children():
@@ -715,6 +900,14 @@ class PulseStreamStudio(ctk.CTk):
         messagebox.showinfo("Queue", f"Track '{track_data.get('title', 'Track')[:25]}' enqueued.")
 
     def delete_track(self, track_data):
+        if self.current_tab.startswith("PLAYLIST_"):
+            pid = int(self.current_tab.split("_")[1])
+            tid = track_data.get("id")
+            if tid:
+                self.db.remove_track_from_playlist(pid, tid)
+            self.navigate(self.current_tab)
+            return
+
         if track_data == self.current_track:
             self.player.stop()
             self.visualizer.set_playing(False)
