@@ -88,32 +88,27 @@ class StreamSearcher:
 
         return None
 
-    def search_tracks(self, query, limit=8):
+    def search_tracks(self, query, limit=16):
         cleaned = self.clean_url(query)
         is_direct_url = str(cleaned).startswith("http://") or str(cleaned).startswith("https://")
 
         ydl_opts = {
             'format': 'bestaudio/best',
-            'extract_flat': True,
+            'extract_flat': 'in_playlist',
             'quiet': True,
             'no_warnings': True,
-            'noplaylist': True,
+            'noplaylist': False,
             'http_headers': {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                 'Accept-Language': 'en-US,en;q=0.9',
-            },
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['android', 'web']
-                }
             }
         }
 
-        if not is_direct_url:
-            ydl_opts['default_search'] = f'ytsearch{limit}'
+        if is_direct_url:
             search_target = cleaned
         else:
-            search_target = cleaned
+            q_clean = query.strip()
+            search_target = f"ytsearch{limit}:{q_clean} songs audio"
 
         tracks = []
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -122,6 +117,7 @@ class StreamSearcher:
                 if not res:
                     return tracks
 
+                raw_entries = []
                 if 'entries' in res and res['entries']:
                     raw_entries = res['entries']
                 else:
@@ -132,18 +128,38 @@ class StreamSearcher:
                         continue
 
                     v_id = str(entry.get("id") or "")
-                    if not v_id:
+                    if not v_id or len(v_id) != 11:
                         entry_url = str(entry.get("url") or "")
-                        id_search = re.search(r'([0-9A-Za-z_-]{11})', entry_url)
+                        id_search = re.search(r'(?:v=|\/|youtu\.be\/|shorts\/)([0-9A-Za-z_-]{11})', entry_url)
                         if id_search:
                             v_id = id_search.group(1)
 
-                    title = entry.get("title", "Unknown Title")
-                    artist = entry.get("uploader", entry.get("channel", "YouTube Artist"))
-                    duration = entry.get("duration", 0) or 0
+                    if not v_id or len(v_id) != 11 or v_id.startswith("UC"):
+                        continue
 
-                    webpage_url = f"https://www.youtube.com/watch?v={v_id}" if v_id else str(entry.get("url") or "")
-                    thumbnail = entry.get("thumbnail") or (f"https://i.ytimg.com/vi/{v_id}/hqdefault.jpg" if v_id else "")
+                    raw_title = entry.get("title") or ""
+                    if not raw_title or raw_title == "Unknown Title":
+                        continue
+
+                    title = raw_title
+                    artist = entry.get("uploader") or entry.get("channel") or entry.get("creator") or ""
+
+                    if " - " in raw_title and not artist:
+                        parts = raw_title.split(" - ", 1)
+                        artist = parts[0].strip()
+                        title = parts[1].strip()
+                    elif not artist:
+                        artist = "Popular Artist"
+
+                    duration = entry.get("duration", 0) or 0
+                    webpage_url = f"https://www.youtube.com/watch?v={v_id}"
+
+                    thumbnail = ""
+                    thumbs = entry.get("thumbnails")
+                    if isinstance(thumbs, list) and len(thumbs) > 0:
+                        thumbnail = thumbs[-1].get("url", "")
+                    if not thumbnail:
+                        thumbnail = entry.get("thumbnail") or f"https://i.ytimg.com/vi/{v_id}/hqdefault.jpg"
 
                     probe_cached = self.get_cached_path({
                         "id": v_id,
@@ -162,8 +178,45 @@ class StreamSearcher:
                         "thumbnail": thumbnail,
                         "source": "STREAM"
                     })
+
             except Exception:
                 pass
+
+        if not is_direct_url and len(tracks) < 4:
+            fallback_opts = {
+                'format': 'bestaudio/best',
+                'extract_flat': 'in_playlist',
+                'quiet': True,
+                'no_warnings': True,
+                'noplaylist': False,
+            }
+            with yt_dlp.YoutubeDL(fallback_opts) as ydl_alt:
+                try:
+                    alt_res = ydl_alt.extract_info(f"ytsearch{limit}:{query}", download=False)
+                    alt_entries = alt_res.get('entries', []) if alt_res else []
+                    seen_ids = {t["id"] for t in tracks}
+                    for entry in alt_entries:
+                        if not entry:
+                            continue
+                        alt_id = str(entry.get("id") or "")
+                        if alt_id and len(alt_id) == 11 and alt_id not in seen_ids and not alt_id.startswith("UC"):
+                            t_name = entry.get("title") or "Unknown Title"
+                            a_name = entry.get("uploader") or "Artist"
+                            t_url = f"https://www.youtube.com/watch?v={alt_id}"
+                            tracks.append({
+                                "id": alt_id,
+                                "title": t_name,
+                                "artist": a_name,
+                                "duration": float(entry.get("duration", 0) or 0),
+                                "url": t_url,
+                                "path": t_url,
+                                "thumbnail": entry.get("thumbnail") or f"https://i.ytimg.com/vi/{alt_id}/hqdefault.jpg",
+                                "source": "STREAM"
+                            })
+                            seen_ids.add(alt_id)
+                except Exception:
+                    pass
+
         return tracks
 
     def download_track(self, track_data, on_progress=None):
