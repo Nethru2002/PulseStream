@@ -14,6 +14,7 @@ from services.recognizer import SongRecognizer
 from services.searcher import StreamSearcher
 from services.db import DatabaseManager
 from services.lyrics import LyricsService
+from services.feed import FeedEngine
 from ui.styles import AppStyles
 from ui.components import (
     SidebarNavButton,
@@ -44,6 +45,7 @@ class PulseStreamStudio(ctk.CTk):
         self.recorder = AudioRecorder()
         self.recognizer = SongRecognizer()
         self.searcher = StreamSearcher()
+        self.feed_engine = FeedEngine(self.db, self.searcher)
         self.lyrics_service = LyricsService()
 
         self.queue = []
@@ -55,6 +57,7 @@ class PulseStreamStudio(ctk.CTk):
         self.current_tab = "EXPLORE"
         self.view_mode = "GRID"
         self.cached_display_tracks = []
+        self.current_feed_shelves = []
 
         self.lyrics_data = {"type": "none", "text": "No active audio stream."}
         self.active_lyric_index = -1
@@ -167,7 +170,7 @@ class PulseStreamStudio(ctk.CTk):
 
         self.section_title = ctk.CTkLabel(
             toolbar,
-            text="Featured & Saved Music",
+            text="Personalized Feed",
             font=(AppStyles.FONT, 15, "bold"),
             text_color=AppStyles.TEXT_TITLE
         )
@@ -243,7 +246,10 @@ class PulseStreamStudio(ctk.CTk):
             fg_color=AppStyles.ACCENT if mode == "LIST" else "transparent",
             text_color=AppStyles.TEXT_WHITE if mode == "LIST" else AppStyles.TEXT_MUTED
         )
-        self.render_tracks(self.cached_display_tracks)
+        if self.current_tab == "EXPLORE":
+            self.render_feed_shelves(self.current_feed_shelves)
+        else:
+            self.render_tracks(self.cached_display_tracks)
 
     def save_all_results_to_playlist(self):
         if not self.cached_display_tracks:
@@ -685,13 +691,8 @@ class PulseStreamStudio(ctk.CTk):
 
         if tab == "EXPLORE":
             self.add_all_btn.pack_forget()
-            self.section_title.configure(text="Featured & Saved Music")
-            tracks = self.db.get_all_saved()
-            self.cached_display_tracks = tracks
-            if tracks:
-                is_fav = self.db.is_favorite(tracks[0].get("path") or tracks[0].get("url", ""))
-                self.hero.update_hero(tracks[0], is_fav=is_fav)
-            self.render_tracks(tracks)
+            self.section_title.configure(text="Personalized Discovery Feed")
+            self.load_personalized_feed()
         elif tab == "FAVORITES":
             self.add_all_btn.pack_forget()
             self.section_title.configure(text="Your Favorite Songs")
@@ -722,6 +723,98 @@ class PulseStreamStudio(ctk.CTk):
             self.add_all_btn.pack_forget()
             pid = int(tab.split("_")[1])
             self.render_playlist_view(pid)
+
+    def load_personalized_feed(self):
+        instant_shelves = self.feed_engine.get_instant_feed()
+        if instant_shelves:
+            self.render_feed_shelves(instant_shelves)
+
+        def on_feed_ready(shelves):
+            self.after(0, lambda: self.render_feed_shelves(shelves))
+
+        self.feed_engine.generate_feed_async(on_feed_ready)
+
+    def render_feed_shelves(self, shelves):
+        self.current_feed_shelves = shelves
+        for w in self.track_scroll.winfo_children():
+            w.destroy()
+
+        if not shelves:
+            ctk.CTkLabel(
+                self.track_scroll,
+                text="Building your personalized feed... Search or play songs to personalize your recommendations.",
+                font=(AppStyles.FONT, 13),
+                text_color=AppStyles.TEXT_MUTED
+            ).pack(pady=60)
+            return
+
+        all_feed_tracks = []
+        for shelf in shelves:
+            all_feed_tracks.extend(shelf["tracks"])
+
+        if all_feed_tracks:
+            top_rec = all_feed_tracks[0]
+            is_fav = self.db.is_favorite(top_rec.get("path") or top_rec.get("url", ""))
+            self.hero.update_hero(top_rec, is_fav=is_fav)
+
+        for shelf in shelves:
+            shelf_frame = ctk.CTkFrame(self.track_scroll, fg_color="transparent")
+            shelf_frame.pack(fill="x", pady=(0, 20))
+
+            header_row = ctk.CTkFrame(shelf_frame, fg_color="transparent")
+            header_row.pack(fill="x", padx=4, pady=(0, 8))
+
+            ctk.CTkLabel(
+                header_row,
+                text=shelf["title"],
+                font=(AppStyles.FONT, 16, "bold"),
+                text_color=AppStyles.TEXT_TITLE
+            ).pack(side="left")
+
+            if shelf.get("subtitle"):
+                ctk.CTkLabel(
+                    header_row,
+                    text=f" •  {shelf['subtitle']}",
+                    font=(AppStyles.FONT, 11),
+                    text_color=AppStyles.TEXT_MUTED
+                ).pack(side="left", padx=8)
+
+            tracks = shelf["tracks"]
+            if self.view_mode == "GRID":
+                grid_frame = ctk.CTkFrame(shelf_frame, fg_color="transparent")
+                grid_frame.pack(fill="both", expand=True)
+
+                cols = 4
+                for i in range(cols):
+                    grid_frame.grid_columnconfigure(i, weight=1)
+
+                for idx, data in enumerate(tracks):
+                    r = idx // cols
+                    c = idx % cols
+                    is_fav = self.db.is_favorite(data.get("path") or data.get("url", ""))
+                    card = AlbumGridCard(
+                        grid_frame,
+                        data=data,
+                        play_cmd=self.request_playback,
+                        fav_cmd=self.toggle_favorite,
+                        menu_cmd=self.open_track_menu,
+                        is_fav=is_fav
+                    )
+                    card.grid(row=r, column=c, padx=6, pady=6, sticky="nsew")
+            else:
+                for idx, data in enumerate(tracks, start=1):
+                    is_fav = self.db.is_favorite(data.get("path") or data.get("url", ""))
+                    row = TrackTableRow(
+                        shelf_frame,
+                        idx=idx,
+                        data=data,
+                        play_cmd=self.request_playback,
+                        fav_cmd=self.toggle_favorite,
+                        save_cmd=self.save_track_offline,
+                        del_cmd=self.delete_track,
+                        is_fav=is_fav
+                    )
+                    row.pack(fill="x", pady=2)
 
     def render_playlist_view(self, playlist_id):
         for w in self.track_scroll.winfo_children():
@@ -830,6 +923,9 @@ class PulseStreamStudio(ctk.CTk):
             return
         is_url = str(query).startswith("http://") or str(query).startswith("https://")
 
+        if not is_url:
+            self.db.record_search(query)
+
         if is_url:
             cached_instant = self.searcher.get_cached_path({"url": query})
             if cached_instant and os.path.exists(cached_instant) and os.path.getsize(cached_instant) > 50000:
@@ -871,7 +967,7 @@ class PulseStreamStudio(ctk.CTk):
                     return
 
                 self.add_all_btn.pack(side="left", padx=(0, 10))
-                self.section_title.configure(text=f"Playlist & Tracks for '{query}' ({len(results)} songs)")
+                self.section_title.configure(text=f"Results for '{query}' ({len(results)} songs)")
                 self.cached_display_tracks = results
                 is_fav = self.db.is_favorite(results[0].get("path") or results[0].get("url", ""))
                 self.hero.update_hero(results[0], is_fav=is_fav)

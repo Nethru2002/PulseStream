@@ -6,7 +6,7 @@ class DatabaseManager:
     def __init__(self, db_path="database.db"):
         self.db_path = db_path
         self._init_db()
-        self._cleanup_duplicates()
+        self._cleanup_invalid_tracks()
 
     def _get_connection(self):
         conn = sqlite3.connect(self.db_path)
@@ -61,62 +61,89 @@ class DatabaseManager:
                     UNIQUE(playlist_id, track_id)
                 )
             """)
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS search_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    query TEXT NOT NULL,
+                    searched_at REAL
+                )
+            """)
             conn.commit()
 
-    def _cleanup_duplicates(self):
+    def _cleanup_invalid_tracks(self):
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM tracks ORDER BY id ASC")
-            all_rows = [dict(r) for r in cursor.fetchall()]
-            if not all_rows:
-                return
-
-            consolidated = {}
-            for r in all_rows:
-                key = (r["title"].strip().lower(), r["artist"].strip().lower())
-                if key not in consolidated:
-                    consolidated[key] = dict(r)
-                else:
-                    curr = consolidated[key]
-                    curr["is_favorite"] = max(curr.get("is_favorite", 0), r.get("is_favorite", 0))
-                    curr["play_count"] = max(curr.get("play_count", 0), r.get("play_count", 0))
-                    curr["duration"] = max(curr.get("duration", 0), r.get("duration", 0))
-                    if not str(r.get("path", "")).startswith("http") and (str(curr.get("path", "")).startswith("http") or not os.path.exists(str(curr.get("path", "")))):
-                        curr["path"] = r["path"]
-                    if r.get("url") and not curr.get("url"):
-                        curr["url"] = r["url"]
-                    if r.get("thumbnail") and not curr.get("thumbnail"):
-                        curr["thumbnail"] = r["thumbnail"]
-
-            by_path = {}
-            for t in consolidated.values():
-                p = t["path"]
-                if p not in by_path:
-                    by_path[p] = t
-                else:
-                    ex = by_path[p]
-                    ex["is_favorite"] = max(ex.get("is_favorite", 0), t.get("is_favorite", 0))
-                    ex["play_count"] = max(ex.get("play_count", 0), t.get("play_count", 0))
-
-            cursor.execute("DELETE FROM tracks")
-            for t in by_path.values():
-                cursor.execute("""
-                    INSERT INTO tracks (id, title, artist, duration, path, thumbnail, is_favorite, source, play_count, url, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    t.get("id"),
-                    t.get("title", "Unknown"),
-                    t.get("artist", "Unknown"),
-                    t.get("duration", 0),
-                    t.get("path"),
-                    t.get("thumbnail", ""),
-                    t.get("is_favorite", 0),
-                    t.get("source", "LOCAL"),
-                    t.get("play_count", 0),
-                    t.get("url", ""),
-                    t.get("created_at", time.time())
-                ))
+            cursor.execute("""
+                DELETE FROM tracks 
+                WHERE LOWER(title) LIKE '%unknown title%' 
+                   OR LOWER(artist) LIKE '%youtube artist%'
+                   OR title = ''
+            """)
+            cursor.execute("""
+                DELETE FROM playlist_tracks 
+                WHERE track_id NOT IN (SELECT id FROM tracks)
+            """)
             conn.commit()
+
+    def record_search(self, query):
+        clean = str(query).strip()
+        if not clean or clean.startswith("http"):
+            return
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO search_history (query, searched_at) VALUES (?, ?)", (clean, time.time()))
+            conn.commit()
+
+    def get_recent_searches(self, limit=5):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT query, MAX(searched_at) AS last_seen
+                FROM search_history
+                GROUP BY LOWER(query)
+                ORDER BY last_seen DESC
+                LIMIT ?
+            """, (limit,))
+            return [row["query"] for row in cursor.fetchall()]
+
+    def get_top_artists(self, limit=5):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT artist, SUM(play_count + (is_favorite * 4)) AS score
+                FROM tracks
+                WHERE LOWER(artist) NOT IN ('unknown artist', 'popular artist', 'youtube artist', 'local artist', '')
+                GROUP BY LOWER(artist)
+                ORDER BY score DESC
+                LIMIT ?
+            """, (limit,))
+            return [row["artist"] for row in cursor.fetchall()]
+
+    def get_frequent_tracks(self, limit=12):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM tracks
+                WHERE LOWER(title) NOT LIKE '%unknown title%'
+                ORDER BY (play_count * 2 + is_favorite * 5) DESC, created_at DESC
+                LIMIT ?
+            """, (limit,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_recent_played_tracks(self, limit=5):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT t.*, MAX(h.played_at) AS last_played
+                FROM history h
+                JOIN tracks t ON h.track_path = t.path OR (t.url != '' AND h.track_path = t.url)
+                WHERE LOWER(t.title) NOT LIKE '%unknown title%'
+                GROUP BY LOWER(t.title), LOWER(t.artist)
+                ORDER BY last_played DESC
+                LIMIT ?
+            """, (limit,))
+            return [dict(row) for row in cursor.fetchall()]
 
     def create_playlist(self, name):
         clean_name = str(name).strip()
@@ -152,6 +179,9 @@ class DatabaseManager:
         dur = float(track_data.get("duration", 0) or 0)
         thumb = str(track_data.get("thumbnail") or "")
         source = str(track_data.get("source") or "STREAM")
+
+        if "unknown title" in title.lower():
+            return False
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -208,13 +238,16 @@ class DatabaseManager:
             return dict(row) if row else None
 
     def add_or_update_track(self, title, artist, duration, path, thumbnail="", source="LOCAL", url=""):
+        clean_title = str(title).strip()
+        clean_artist = str(artist).strip()
+
+        if "unknown title" in clean_title.lower() or not clean_title:
+            return
+
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            clean_title = title.strip()
-            clean_artist = artist.strip()
-
             cursor.execute("""
-                SELECT id, is_favorite, path, url FROM tracks 
+                SELECT id, is_favorite, path, url, thumbnail FROM tracks 
                 WHERE path = ? 
                    OR (url != '' AND url = ?) 
                    OR (LOWER(title) = LOWER(?) AND LOWER(artist) = LOWER(?))
@@ -225,6 +258,7 @@ class DatabaseManager:
             if existing:
                 best_path = path if not str(path).startswith("http") else existing["path"]
                 best_url = url if url else existing["url"]
+                best_thumb = thumbnail if thumbnail and os.path.exists(thumbnail) else existing["thumbnail"]
 
                 if best_path != existing["path"]:
                     cursor.execute("DELETE FROM tracks WHERE path = ? AND id != ?", (best_path, existing["id"]))
@@ -235,11 +269,11 @@ class DatabaseManager:
                         artist = ?,
                         duration = CASE WHEN ? > 0 THEN ? ELSE duration END,
                         path = ?,
-                        thumbnail = CASE WHEN ? != '' THEN ? ELSE thumbnail END,
+                        thumbnail = ?,
                         url = ?,
                         source = ?
                     WHERE id = ?
-                """, (clean_title, clean_artist, duration, duration, best_path, thumbnail, thumbnail, best_url, source, existing["id"]))
+                """, (clean_title, clean_artist, duration, duration, best_path, best_thumb, best_url, source, existing["id"]))
             else:
                 cursor.execute("""
                     INSERT INTO tracks (title, artist, duration, path, thumbnail, source, url, created_at)
@@ -333,6 +367,7 @@ class DatabaseManager:
             cursor.execute("""
                 SELECT * FROM tracks 
                 WHERE is_favorite = 1 
+                  AND LOWER(title) NOT LIKE '%unknown title%'
                 GROUP BY LOWER(title), LOWER(artist)
                 ORDER BY created_at DESC
             """)
@@ -345,6 +380,7 @@ class DatabaseManager:
                 SELECT t.*, MAX(h.played_at) AS last_played
                 FROM history h
                 JOIN tracks t ON h.track_path = t.path OR (t.url != '' AND h.track_path = t.url)
+                WHERE LOWER(t.title) NOT LIKE '%unknown title%'
                 GROUP BY LOWER(t.title), LOWER(t.artist)
                 ORDER BY last_played DESC
                 LIMIT ?
@@ -356,6 +392,7 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT * FROM tracks 
+                WHERE LOWER(title) NOT LIKE '%unknown title%'
                 GROUP BY LOWER(title), LOWER(artist)
                 ORDER BY created_at DESC
             """)

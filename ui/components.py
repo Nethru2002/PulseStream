@@ -1,5 +1,7 @@
 import os
 import random
+import threading
+import requests
 import customtkinter as ctk
 from tkinter import Canvas, Menu
 from PIL import Image, ImageDraw, ImageOps
@@ -9,10 +11,11 @@ from utils.helpers import format_time
 def create_rounded_cover(image_path_or_obj, size=(50, 50), radius=10):
     try:
         if isinstance(image_path_or_obj, str):
-            if not image_path_or_obj or not os.path.exists(image_path_or_obj):
+            p = image_path_or_obj.strip()
+            if not p or not os.path.exists(p):
                 img = Image.new("RGBA", size, color="#1A1D2B")
             else:
-                img = Image.open(image_path_or_obj).convert("RGBA")
+                img = Image.open(p).convert("RGBA")
         elif image_path_or_obj is None:
             img = Image.new("RGBA", size, color="#1A1D2B")
         else:
@@ -108,10 +111,10 @@ class HeroShowcase(ctk.CTkFrame):
         self.title_lbl = ctk.CTkLabel(
             meta,
             text="Welcome to PulseStream",
-            font=(AppStyles.FONT, 20, "bold"),
+            font=(AppStyles.FONT, 18, "bold"),
             text_color=AppStyles.TEXT_TITLE,
             anchor="w",
-            wraplength=600,
+            wraplength=580,
             justify="left"
         )
         self.title_lbl.pack(anchor="w", pady=(4, 2), fill="x")
@@ -122,7 +125,7 @@ class HeroShowcase(ctk.CTkFrame):
             font=(AppStyles.FONT, 13),
             text_color=AppStyles.TEXT_MUTED,
             anchor="w",
-            wraplength=600,
+            wraplength=580,
             justify="left"
         )
         self.artist_lbl.pack(anchor="w", pady=(0, 14), fill="x")
@@ -162,12 +165,36 @@ class HeroShowcase(ctk.CTkFrame):
         self.current_data = track_data
         self.title_lbl.configure(text=track_data.get("title", ""))
         self.artist_lbl.configure(text=track_data.get("artist", "Unknown Artist"))
-        thumb_img = create_rounded_cover(track_data.get("thumbnail", ""), size=(140, 140), radius=16)
-        self.cover_lbl.configure(image=thumb_img)
+
+        thumb_src = track_data.get("thumbnail", "")
+        self._resolve_and_set_thumb(thumb_src)
+
         self.fav_btn.configure(
             text="♥  Liked" if is_fav else "♡  Favorite",
             text_color=AppStyles.ACCENT if is_fav else AppStyles.TEXT_WHITE
         )
+
+    def _resolve_and_set_thumb(self, thumb_src):
+        if thumb_src and os.path.exists(thumb_src):
+            img = create_rounded_cover(thumb_src, size=(140, 140), radius=16)
+            self.cover_lbl.configure(image=img)
+        elif thumb_src and str(thumb_src).startswith("http"):
+            def fetch():
+                try:
+                    r = requests.get(thumb_src, timeout=4)
+                    if r.status_code == 200:
+                        v_id = self.current_data.get("id") or "hero"
+                        local_file = os.path.abspath(f"cache/thumbs/{v_id}.jpg")
+                        with open(local_file, "wb") as f:
+                            f.write(r.content)
+                        self.current_data["thumbnail"] = local_file
+                        new_img = create_rounded_cover(local_file, size=(140, 140), radius=16)
+                        self.after(0, lambda: self.cover_lbl.configure(image=new_img))
+                except Exception:
+                    pass
+            threading.Thread(target=fetch, daemon=True).start()
+        else:
+            self.cover_lbl.configure(image=create_rounded_cover("", size=(140, 140), radius=16))
 
     def _on_play(self):
         if self.current_data and self.play_callback:
@@ -189,8 +216,8 @@ class AlbumGridCard(ctk.CTkFrame):
             corner_radius=16,
             border_width=1,
             border_color=AppStyles.BORDER_CARD,
-            width=182,
-            height=280,
+            width=188,
+            height=330,
             **kwargs
         )
         self.pack_propagate(False)
@@ -200,84 +227,96 @@ class AlbumGridCard(ctk.CTkFrame):
         self.menu_cmd = menu_cmd
         self.is_fav = is_fav
 
-        self.cover_lbl = ctk.CTkLabel(
-            self,
-            text="",
-            image=create_rounded_cover(data.get("thumbnail", ""), size=(158, 158), radius=12),
-            width=158,
-            height=158,
-            corner_radius=12
-        )
-        self.cover_lbl.pack(padx=12, pady=(12, 6))
+        self.art_wrap = ctk.CTkFrame(self, width=164, height=164, corner_radius=12, fg_color="#181B28")
+        self.art_wrap.pack(padx=12, pady=(12, 8))
+        self.art_wrap.pack_propagate(False)
 
-        t_lbl = ctk.CTkLabel(
+        self.cover_lbl = ctk.CTkLabel(
+            self.art_wrap,
+            text="",
+            image=create_rounded_cover("", size=(164, 164), radius=12),
+            width=164,
+            height=164
+        )
+        self.cover_lbl.place(relx=0.5, rely=0.5, anchor="center")
+        self._load_thumbnail()
+
+        raw_title = str(data.get("title", "Unknown")).strip()
+        display_title = raw_title if len(raw_title) <= 52 else raw_title[:49] + "..."
+
+        self.t_lbl = ctk.CTkLabel(
             self,
-            text=data.get("title", "Unknown"),
+            text=display_title,
             font=(AppStyles.FONT, 12, "bold"),
             text_color=AppStyles.TEXT_TITLE,
-            anchor="w",
-            wraplength=156,
-            justify="left"
+            anchor="nw",
+            wraplength=162,
+            justify="left",
+            height=38
         )
-        t_lbl.pack(fill="x", padx=12, pady=(0, 1))
+        self.t_lbl.pack(fill="x", padx=12, pady=(0, 2))
 
-        a_lbl = ctk.CTkLabel(
+        raw_artist = str(data.get("artist", "Unknown")).strip()
+        display_artist = raw_artist if len(raw_artist) <= 26 else raw_artist[:24] + "..."
+
+        self.a_lbl = ctk.CTkLabel(
             self,
-            text=data.get("artist", "Unknown"),
+            text=display_artist,
             font=(AppStyles.FONT, 11),
             text_color=AppStyles.TEXT_MUTED,
             anchor="w",
-            wraplength=156,
+            wraplength=162,
             justify="left"
         )
-        a_lbl.pack(fill="x", padx=12, pady=(0, 6))
+        self.a_lbl.pack(fill="x", padx=12, pady=(0, 6))
 
-        actions = ctk.CTkFrame(self, fg_color="transparent", height=34)
-        actions.pack(fill="x", padx=10, pady=(0, 8), side="bottom")
+        self.actions = ctk.CTkFrame(self, fg_color="transparent", height=42)
+        self.actions.pack(fill="x", padx=12, pady=(0, 10), side="bottom")
+        self.actions.pack_propagate(False)
 
-        play_btn = ctk.CTkButton(
-            actions,
+        self.play_btn = ctk.CTkButton(
+            self.actions,
             text="▶",
-            width=34,
-            height=34,
-            corner_radius=17,
+            width=36,
+            height=36,
+            corner_radius=18,
             fg_color=AppStyles.ACCENT,
             hover_color=AppStyles.ACCENT_HOVER,
             text_color=AppStyles.TEXT_WHITE,
-            font=(AppStyles.FONT, 12, "bold"),
+            font=(AppStyles.FONT, 13, "bold"),
             command=lambda: self.play_cmd(self.data)
         )
-        play_btn.pack(side="left")
+        self.play_btn.pack(side="left")
 
         self.fav_btn = ctk.CTkButton(
-            actions,
+            self.actions,
             text="♥" if self.is_fav else "♡",
-            width=32,
-            height=32,
-            corner_radius=16,
+            width=34,
+            height=34,
+            corner_radius=17,
             fg_color="transparent",
             hover_color=AppStyles.BG_CARD_HOVER,
             text_color=AppStyles.ACCENT if self.is_fav else AppStyles.TEXT_MUTED,
             font=(AppStyles.FONT, 15),
             command=self._on_fav_click
         )
-        self.fav_btn.pack(side="right", padx=(2, 0))
+        self.fav_btn.pack(side="right")
 
-        opt_btn = ctk.CTkButton(
-            actions,
+        self.opt_btn = ctk.CTkButton(
+            self.actions,
             text="⋮",
-            width=28,
-            height=28,
-            corner_radius=14,
+            width=30,
+            height=34,
+            corner_radius=15,
             fg_color="transparent",
             hover_color=AppStyles.BG_CARD_HOVER,
             text_color=AppStyles.TEXT_MUTED,
-            font=(AppStyles.FONT, 15, "bold"),
-            command=lambda: self.menu_cmd(self.data, opt_btn.winfo_rootx(), opt_btn.winfo_rooty() + opt_btn.winfo_height())
+            font=(AppStyles.FONT, 16, "bold"),
+            command=lambda: self.menu_cmd(self.data, self.opt_btn.winfo_rootx(), self.opt_btn.winfo_rooty() + self.opt_btn.winfo_height())
         )
-        opt_btn.pack(side="right")
+        self.opt_btn.pack(side="right", padx=2)
 
-        hover_group = [self, self.cover_lbl, t_lbl, a_lbl, actions]
+        hover_group = [self, self.art_wrap, self.cover_lbl, self.t_lbl, self.a_lbl, self.actions]
 
         def on_enter(e):
             self.configure(
@@ -289,7 +328,7 @@ class AlbumGridCard(ctk.CTkFrame):
         def on_leave(e):
             x, y = self.winfo_pointerxy()
             widget = self.winfo_containing(x, y)
-            if widget not in hover_group and widget not in [play_btn, self.fav_btn, opt_btn]:
+            if widget not in hover_group and widget not in [self.play_btn, self.fav_btn, self.opt_btn]:
                 self.configure(
                     fg_color=AppStyles.BG_CARD,
                     border_color=AppStyles.BORDER_CARD,
@@ -306,9 +345,36 @@ class AlbumGridCard(ctk.CTkFrame):
             w.bind("<Enter>", on_enter)
             w.bind("<Leave>", on_leave)
             w.bind("<Button-3>", on_right_click)
-            if w in [self, self.cover_lbl, t_lbl, a_lbl]:
+            if w in [self, self.art_wrap, self.cover_lbl, self.t_lbl, self.a_lbl]:
                 w.bind("<Button-1>", on_click)
                 w.bind("<Double-Button-1>", on_click)
+
+    def _load_thumbnail(self):
+        thumb_src = self.data.get("thumbnail", "")
+        if thumb_src and os.path.exists(thumb_src):
+            img = create_rounded_cover(thumb_src, size=(164, 164), radius=12)
+            self.cover_lbl.configure(image=img)
+            return
+
+        v_id = self.data.get("id") or ""
+        if not thumb_src and v_id and len(v_id) == 11:
+            thumb_src = f"https://i.ytimg.com/vi/{v_id}/hqdefault.jpg"
+
+        if thumb_src and str(thumb_src).startswith("http"):
+            def download_async():
+                try:
+                    safe_id = v_id if v_id else "thumb"
+                    dest = os.path.abspath(f"cache/thumbs/{safe_id}.jpg")
+                    r = requests.get(thumb_src, timeout=4)
+                    if r.status_code == 200:
+                        with open(dest, "wb") as f:
+                            f.write(r.content)
+                        self.data["thumbnail"] = dest
+                        new_img = create_rounded_cover(dest, size=(164, 164), radius=12)
+                        self.after(0, lambda: self.cover_lbl.configure(image=new_img))
+                except Exception:
+                    pass
+            threading.Thread(target=download_async, daemon=True).start()
 
     def _on_fav_click(self):
         new_val = self.fav_cmd(self.data)
@@ -352,12 +418,13 @@ class TrackTableRow(ctk.CTkFrame):
         self.art_box = ctk.CTkLabel(
             self,
             text="",
-            image=create_rounded_cover(data.get("thumbnail", ""), size=(44, 44), radius=10),
+            image=create_rounded_cover("", size=(44, 44), radius=10),
             width=44,
             height=44
         )
         self.art_box.pack(side="left", padx=8)
         self.art_box.bind("<Button-1>", lambda e: self.play_cmd(self.data))
+        self._load_row_thumbnail()
 
         info_box = ctk.CTkFrame(self, fg_color="transparent")
         info_box.pack(side="left", fill="both", expand=True, padx=10, pady=8)
@@ -479,6 +546,33 @@ class TrackTableRow(ctk.CTkFrame):
 
         for w in (self, info_box, t_lbl, a_lbl, self.art_box, idx_lbl, dur_lbl, src_badge):
             w.bind("<Button-3>", post_menu)
+
+    def _load_row_thumbnail(self):
+        thumb_src = self.data.get("thumbnail", "")
+        if thumb_src and os.path.exists(thumb_src):
+            img = create_rounded_cover(thumb_src, size=(44, 44), radius=10)
+            self.art_box.configure(image=img)
+            return
+
+        v_id = self.data.get("id") or ""
+        if not thumb_src and v_id and len(v_id) == 11:
+            thumb_src = f"https://i.ytimg.com/vi/{v_id}/hqdefault.jpg"
+
+        if thumb_src and str(thumb_src).startswith("http"):
+            def download_async():
+                try:
+                    safe_id = v_id if v_id else "thumb"
+                    dest = os.path.abspath(f"cache/thumbs/{safe_id}.jpg")
+                    r = requests.get(thumb_src, timeout=4)
+                    if r.status_code == 200:
+                        with open(dest, "wb") as f:
+                            f.write(r.content)
+                        self.data["thumbnail"] = dest
+                        new_img = create_rounded_cover(dest, size=(44, 44), radius=10)
+                        self.after(0, lambda: self.art_box.configure(image=new_img))
+                except Exception:
+                    pass
+            threading.Thread(target=download_async, daemon=True).start()
 
     def _show_menu_from_btn(self):
         x = self.opt_btn.winfo_rootx()

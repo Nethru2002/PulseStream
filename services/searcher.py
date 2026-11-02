@@ -4,7 +4,7 @@ import time
 import urllib.parse
 import requests
 import yt_dlp
-from utils.helpers import ensure_dir, sanitize_filename
+from utils.helpers import ensure_dir, sanitize_filename, clean_track_metadata
 
 class StreamSearcher:
     def __init__(self):
@@ -107,8 +107,7 @@ class StreamSearcher:
         if is_direct_url:
             search_target = cleaned
         else:
-            q_clean = query.strip()
-            search_target = f"ytsearch{limit}:{q_clean} songs audio"
+            search_target = f"ytsearch{limit}:{query.strip()} songs"
 
         tracks = []
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -123,6 +122,8 @@ class StreamSearcher:
                 else:
                     raw_entries = [res]
 
+                seen_ids = set()
+
                 for entry in raw_entries:
                     if not entry:
                         continue
@@ -134,7 +135,7 @@ class StreamSearcher:
                         if id_search:
                             v_id = id_search.group(1)
 
-                    if not v_id or len(v_id) != 11 or v_id.startswith("UC"):
+                    if not v_id or len(v_id) != 11 or v_id in seen_ids or v_id.startswith("UC"):
                         continue
 
                     raw_title = entry.get("title") or ""
@@ -142,24 +143,22 @@ class StreamSearcher:
                         continue
 
                     title = raw_title
-                    artist = entry.get("uploader") or entry.get("channel") or entry.get("creator") or ""
-
-                    if " - " in raw_title and not artist:
-                        parts = raw_title.split(" - ", 1)
-                        artist = parts[0].strip()
-                        title = parts[1].strip()
-                    elif not artist:
-                        artist = "Popular Artist"
+                    artist = entry.get("uploader") or entry.get("channel") or entry.get("creator") or "Popular Artist"
 
                     duration = entry.get("duration", 0) or 0
                     webpage_url = f"https://www.youtube.com/watch?v={v_id}"
 
+                    local_thumb = os.path.join(self.thumb_dir, f"{v_id}.jpg")
                     thumbnail = ""
-                    thumbs = entry.get("thumbnails")
-                    if isinstance(thumbs, list) and len(thumbs) > 0:
-                        thumbnail = thumbs[-1].get("url", "")
-                    if not thumbnail:
-                        thumbnail = entry.get("thumbnail") or f"https://i.ytimg.com/vi/{v_id}/hqdefault.jpg"
+
+                    if os.path.exists(local_thumb) and os.path.getsize(local_thumb) > 1000:
+                        thumbnail = local_thumb
+                    else:
+                        thumbs = entry.get("thumbnails")
+                        if isinstance(thumbs, list) and len(thumbs) > 0:
+                            thumbnail = thumbs[-1].get("url", "")
+                        if not thumbnail:
+                            thumbnail = entry.get("thumbnail") or f"https://i.ytimg.com/vi/{v_id}/hqdefault.jpg"
 
                     probe_cached = self.get_cached_path({
                         "id": v_id,
@@ -178,44 +177,10 @@ class StreamSearcher:
                         "thumbnail": thumbnail,
                         "source": "STREAM"
                     })
+                    seen_ids.add(v_id)
 
             except Exception:
                 pass
-
-        if not is_direct_url and len(tracks) < 4:
-            fallback_opts = {
-                'format': 'bestaudio/best',
-                'extract_flat': 'in_playlist',
-                'quiet': True,
-                'no_warnings': True,
-                'noplaylist': False,
-            }
-            with yt_dlp.YoutubeDL(fallback_opts) as ydl_alt:
-                try:
-                    alt_res = ydl_alt.extract_info(f"ytsearch{limit}:{query}", download=False)
-                    alt_entries = alt_res.get('entries', []) if alt_res else []
-                    seen_ids = {t["id"] for t in tracks}
-                    for entry in alt_entries:
-                        if not entry:
-                            continue
-                        alt_id = str(entry.get("id") or "")
-                        if alt_id and len(alt_id) == 11 and alt_id not in seen_ids and not alt_id.startswith("UC"):
-                            t_name = entry.get("title") or "Unknown Title"
-                            a_name = entry.get("uploader") or "Artist"
-                            t_url = f"https://www.youtube.com/watch?v={alt_id}"
-                            tracks.append({
-                                "id": alt_id,
-                                "title": t_name,
-                                "artist": a_name,
-                                "duration": float(entry.get("duration", 0) or 0),
-                                "url": t_url,
-                                "path": t_url,
-                                "thumbnail": entry.get("thumbnail") or f"https://i.ytimg.com/vi/{alt_id}/hqdefault.jpg",
-                                "source": "STREAM"
-                            })
-                            seen_ids.add(alt_id)
-                except Exception:
-                    pass
 
         return tracks
 
@@ -267,16 +232,15 @@ class StreamSearcher:
         target_file = os.path.join(self.cache_dir, f"{v_id}.mp3")
         thumb_file = os.path.join(self.thumb_dir, f"{v_id}.jpg")
 
-        if track_data.get("thumbnail") and not os.path.exists(thumb_file):
+        thumb_remote = track_data.get("thumbnail") or f"https://i.ytimg.com/vi/{v_id}/hqdefault.jpg"
+        if not os.path.exists(thumb_file) and thumb_remote and thumb_remote.startswith("http"):
             try:
-                res = requests.get(track_data["thumbnail"], timeout=4)
+                res = requests.get(thumb_remote, timeout=4)
                 if res.status_code == 200:
                     with open(thumb_file, "wb") as f:
                         f.write(res.content)
             except Exception:
-                thumb_file = ""
-        elif not os.path.exists(thumb_file):
-            thumb_file = ""
+                pass
 
         if os.path.exists(target_file):
             if os.path.getsize(target_file) > 50000:
@@ -286,7 +250,7 @@ class StreamSearcher:
                     "duration": track_data.get("duration", 0),
                     "path": target_file,
                     "url": target_url if str(target_url).startswith("http") else f"https://www.youtube.com/watch?v={v_id}",
-                    "thumbnail": thumb_file,
+                    "thumbnail": thumb_file if os.path.exists(thumb_file) else "",
                     "source": "STREAM"
                 }
             else:
@@ -359,6 +323,6 @@ class StreamSearcher:
             "duration": track_data.get("duration", 0),
             "path": target_file,
             "url": target_url if str(target_url).startswith("http") else f"https://www.youtube.com/watch?v={v_id}",
-            "thumbnail": thumb_file,
+            "thumbnail": thumb_file if os.path.exists(thumb_file) else "",
             "source": "STREAM"
         }
