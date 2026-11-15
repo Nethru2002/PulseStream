@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import time
+from utils.helpers import clean_track_metadata, is_corporate_channel
 
 class DatabaseManager:
     def __init__(self, db_path="database.db"):
@@ -80,6 +81,12 @@ class DatabaseManager:
                    OR LOWER(artist) LIKE '%youtube artist%'
                    OR title = ''
             """)
+            cursor.execute("SELECT id, title, artist FROM tracks")
+            rows = cursor.fetchall()
+            for r in rows:
+                c_title, c_artist = clean_track_metadata(r["title"], r["artist"])
+                if c_title != r["title"] or c_artist != r["artist"]:
+                    cursor.execute("UPDATE tracks SET title = ?, artist = ? WHERE id = ?", (c_title, c_artist, r["id"]))
             cursor.execute("""
                 DELETE FROM playlist_tracks 
                 WHERE track_id NOT IN (SELECT id FROM tracks)
@@ -113,12 +120,18 @@ class DatabaseManager:
             cursor.execute("""
                 SELECT artist, SUM(play_count + (is_favorite * 4)) AS score
                 FROM tracks
-                WHERE LOWER(artist) NOT IN ('unknown artist', 'popular artist', 'youtube artist', 'local artist', '')
+                WHERE LOWER(artist) NOT IN ('unknown artist', 'popular artist', 'youtube artist', 'local artist', 'various artists', '')
                 GROUP BY LOWER(artist)
                 ORDER BY score DESC
-                LIMIT ?
-            """, (limit,))
-            return [row["artist"] for row in cursor.fetchall()]
+            """)
+            valid_artists = []
+            for row in cursor.fetchall():
+                art = row["artist"]
+                if not is_corporate_channel(art):
+                    valid_artists.append(art)
+                    if len(valid_artists) == limit:
+                        break
+            return valid_artists
 
     def get_frequent_tracks(self, limit=12):
         with self._get_connection() as conn:
@@ -144,6 +157,100 @@ class DatabaseManager:
                 LIMIT ?
             """, (limit,))
             return [dict(row) for row in cursor.fetchall()]
+
+    def get_analytics_summary(self):
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+
+            cursor.execute("SELECT COUNT(*) AS total_history, SUM(t.duration) AS total_sec FROM history h JOIN tracks t ON h.track_path = t.path OR (t.url != '' AND h.track_path = t.url)")
+            h_stat = cursor.fetchone()
+            total_plays = h_stat["total_history"] or 0
+            total_seconds = h_stat["total_sec"] or 0
+
+            cursor.execute("SELECT COUNT(*) AS fav_count FROM tracks WHERE is_favorite = 1")
+            fav_count = cursor.fetchone()["fav_count"] or 0
+
+            cursor.execute("SELECT COUNT(*) AS pl_count FROM playlists")
+            pl_count = cursor.fetchone()["pl_count"] or 0
+
+            cursor.execute("""
+                SELECT * FROM tracks 
+                WHERE LOWER(title) NOT LIKE '%unknown title%'
+                  AND play_count > 0
+                ORDER BY play_count DESC, is_favorite DESC, created_at DESC
+                LIMIT 1
+            """)
+            top_track_row = cursor.fetchone()
+            top_track = dict(top_track_row) if top_track_row else None
+
+            cursor.execute("""
+                SELECT artist, SUM(play_count) AS total_plays, SUM(is_favorite) AS fav_count, COUNT(*) AS track_count
+                FROM tracks
+                WHERE LOWER(artist) NOT IN ('unknown artist', 'popular artist', 'youtube artist', 'local artist', 'various artists', '')
+                  AND play_count > 0
+                GROUP BY LOWER(artist)
+                ORDER BY total_plays DESC, fav_count DESC, track_count DESC
+            """)
+            all_ranked_artists = [dict(r) for r in cursor.fetchall() if not is_corporate_channel(r["artist"])]
+
+            top_artist = all_ranked_artists[0] if all_ranked_artists else None
+            top_artists_5 = all_ranked_artists[:5]
+
+            cursor.execute("""
+                SELECT * FROM tracks 
+                WHERE LOWER(title) NOT LIKE '%unknown title%'
+                  AND play_count > 0
+                ORDER BY play_count DESC, is_favorite DESC, created_at DESC
+                LIMIT 5
+            """)
+            top_tracks_5 = [dict(r) for r in cursor.fetchall()]
+
+            cursor.execute("""
+                SELECT t.title, t.artist, t.thumbnail, t.path, t.url, t.duration, h.played_at
+                FROM history h
+                JOIN tracks t ON h.track_path = t.path OR (t.url != '' AND h.track_path = t.url)
+                ORDER BY h.played_at DESC
+                LIMIT 20
+            """)
+            recent_logs = [dict(r) for r in cursor.fetchall()]
+
+            genre = self._infer_genre_affinity(cursor)
+
+            return {
+                "total_plays": total_plays,
+                "total_hours": round(total_seconds / 3600.0, 1),
+                "favorites_count": fav_count,
+                "playlists_count": pl_count,
+                "top_genre": genre,
+                "all_time_track": top_track,
+                "all_time_artist": top_artist,
+                "top_5_tracks": top_tracks_5,
+                "top_5_artists": top_artists_5,
+                "recent_logs": recent_logs
+            }
+
+    def _infer_genre_affinity(self, cursor):
+        cursor.execute("SELECT LOWER(title || ' ' || artist) AS text FROM tracks")
+        corpus = " ".join([r["text"] for r in cursor.fetchall()])
+
+        cursor.execute("SELECT LOWER(query) AS q FROM search_history")
+        corpus += " " + " ".join([r["q"] for r in cursor.fetchall()])
+
+        genre_weights = {
+            "R&B / Soul": ["r&b", "soul", "weeknd", "frank ocean", "sza", "joji", "brent", "daniel caesar"],
+            "Pop / Hit Anthems": ["pop", "taylor", "ariana", "dua lipa", "ed sheeran", "billie", "olivia", "harry styles"],
+            "Hip-Hop / Rap": ["hip hop", "rap", "drake", "kendrick", "travis", "kanye", "eminem", "cole", "post malone"],
+            "Electronic / Dance": ["edm", "dance", "house", "remix", "tiesto", "calvin harris", "alan walker", "avicii", "lost stories"],
+            "Rock / Alternative": ["rock", "alt", "coldplay", "arctic monkeys", "queen", "linkin", "imagine dragons", "nirvana"],
+            "Sinhala / Regional Fusion": ["sonduru", "ridma", "charitha", "attalage", "danith", "sanuka", "sinhala", "coke studio", "anuv jain", "arz"]
+        }
+
+        scores = {}
+        for g, keywords in genre_weights.items():
+            scores[g] = sum(corpus.count(kw) for kw in keywords)
+
+        best_genre = max(scores, key=scores.get)
+        return best_genre if scores[best_genre] > 0 else "Eclectic Mix"
 
     def create_playlist(self, name):
         clean_name = str(name).strip()
@@ -172,8 +279,9 @@ class DatabaseManager:
             conn.commit()
 
     def add_track_to_playlist(self, playlist_id, track_data):
-        title = str(track_data.get("title", "Unknown")).strip()
-        artist = str(track_data.get("artist", "Unknown")).strip()
+        raw_t = track_data.get("title", "Unknown")
+        raw_a = track_data.get("artist", "Unknown")
+        title, artist = clean_track_metadata(raw_t, raw_a)
         path = str(track_data.get("path") or track_data.get("url") or "")
         url = str(track_data.get("url") or "")
         dur = float(track_data.get("duration", 0) or 0)
@@ -238,10 +346,9 @@ class DatabaseManager:
             return dict(row) if row else None
 
     def add_or_update_track(self, title, artist, duration, path, thumbnail="", source="LOCAL", url=""):
-        clean_title = str(title).strip()
-        clean_artist = str(artist).strip()
+        c_title, c_artist = clean_track_metadata(title, artist)
 
-        if "unknown title" in clean_title.lower() or not clean_title:
+        if "unknown title" in c_title.lower() or not c_title:
             return
 
         with self._get_connection() as conn:
@@ -252,7 +359,7 @@ class DatabaseManager:
                    OR (url != '' AND url = ?) 
                    OR (LOWER(title) = LOWER(?) AND LOWER(artist) = LOWER(?))
                 LIMIT 1
-            """, (path, url, clean_title, clean_artist))
+            """, (path, url, c_title, c_artist))
             existing = cursor.fetchone()
 
             if existing:
@@ -273,7 +380,7 @@ class DatabaseManager:
                         url = ?,
                         source = ?
                     WHERE id = ?
-                """, (clean_title, clean_artist, duration, duration, best_path, best_thumb, best_url, source, existing["id"]))
+                """, (c_title, c_artist, duration, duration, best_path, best_thumb, best_url, source, existing["id"]))
             else:
                 cursor.execute("""
                     INSERT INTO tracks (title, artist, duration, path, thumbnail, source, url, created_at)
@@ -284,15 +391,16 @@ class DatabaseManager:
                         duration = CASE WHEN excluded.duration > 0 THEN excluded.duration ELSE tracks.duration END,
                         thumbnail = CASE WHEN excluded.thumbnail != '' THEN excluded.thumbnail ELSE tracks.thumbnail END,
                         url = CASE WHEN excluded.url != '' THEN excluded.url ELSE tracks.url END
-                """, (clean_title, clean_artist, duration, path, thumbnail, source, url, time.time()))
+                """, (c_title, c_artist, duration, path, thumbnail, source, url, time.time()))
 
             conn.commit()
 
     def toggle_favorite_track(self, track_data):
         identifier = track_data.get("path") or track_data.get("url") or track_data.get("id")
         raw_url = track_data.get("url", "")
-        title = str(track_data.get("title", "")).strip()
-        artist = str(track_data.get("artist", "")).strip()
+        raw_t = track_data.get("title", "")
+        raw_a = track_data.get("artist", "")
+        title, artist = clean_track_metadata(raw_t, raw_a)
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -317,7 +425,7 @@ class DatabaseManager:
                     ON CONFLICT(path) DO UPDATE SET is_favorite = 1
                 """, (
                     title if title else "Unknown",
-                    artist if artist else "Unknown",
+                    artist if artist else "Various Artists",
                     track_data.get("duration", 0),
                     identifier,
                     track_data.get("thumbnail", ""),

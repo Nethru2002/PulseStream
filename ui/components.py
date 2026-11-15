@@ -177,7 +177,11 @@ class HeroShowcase(ctk.CTkFrame):
     def _resolve_and_set_thumb(self, thumb_src):
         if thumb_src and os.path.exists(thumb_src):
             img = create_rounded_cover(thumb_src, size=(140, 140), radius=16)
-            self.cover_lbl.configure(image=img)
+            try:
+                if self.winfo_exists() and self.cover_lbl.winfo_exists():
+                    self.cover_lbl.configure(image=img)
+            except Exception:
+                pass
         elif thumb_src and str(thumb_src).startswith("http"):
             def fetch():
                 try:
@@ -189,12 +193,22 @@ class HeroShowcase(ctk.CTkFrame):
                             f.write(r.content)
                         self.current_data["thumbnail"] = local_file
                         new_img = create_rounded_cover(local_file, size=(140, 140), radius=16)
-                        self.after(0, lambda: self.cover_lbl.configure(image=new_img))
+                        def safe_update():
+                            try:
+                                if self.winfo_exists() and self.cover_lbl.winfo_exists():
+                                    self.cover_lbl.configure(image=new_img)
+                            except Exception:
+                                pass
+                        self.after(0, safe_update)
                 except Exception:
                     pass
             threading.Thread(target=fetch, daemon=True).start()
         else:
-            self.cover_lbl.configure(image=create_rounded_cover("", size=(140, 140), radius=16))
+            try:
+                if self.winfo_exists() and self.cover_lbl.winfo_exists():
+                    self.cover_lbl.configure(image=create_rounded_cover("", size=(140, 140), radius=16))
+            except Exception:
+                pass
 
     def _on_play(self):
         if self.current_data and self.play_callback:
@@ -319,21 +333,30 @@ class AlbumGridCard(ctk.CTkFrame):
         hover_group = [self, self.art_wrap, self.cover_lbl, self.t_lbl, self.a_lbl, self.actions]
 
         def on_enter(e):
-            self.configure(
-                fg_color=AppStyles.BG_CARD_HOVER,
-                border_color=AppStyles.BORDER_ACTIVE,
-                border_width=2
-            )
+            try:
+                if self.winfo_exists():
+                    self.configure(
+                        fg_color=AppStyles.BG_CARD_HOVER,
+                        border_color=AppStyles.BORDER_ACTIVE,
+                        border_width=2
+                    )
+            except Exception:
+                pass
 
         def on_leave(e):
-            x, y = self.winfo_pointerxy()
-            widget = self.winfo_containing(x, y)
-            if widget not in hover_group and widget not in [self.play_btn, self.fav_btn, self.opt_btn]:
-                self.configure(
-                    fg_color=AppStyles.BG_CARD,
-                    border_color=AppStyles.BORDER_CARD,
-                    border_width=1
-                )
+            try:
+                if not self.winfo_exists():
+                    return
+                x, y = self.winfo_pointerxy()
+                widget = self.winfo_containing(x, y)
+                if widget not in hover_group and widget not in [self.play_btn, self.fav_btn, self.opt_btn]:
+                    self.configure(
+                        fg_color=AppStyles.BG_CARD,
+                        border_color=AppStyles.BORDER_CARD,
+                        border_width=1
+                    )
+            except Exception:
+                pass
 
         def on_click(e):
             self.play_cmd(self.data)
@@ -353,7 +376,11 @@ class AlbumGridCard(ctk.CTkFrame):
         thumb_src = self.data.get("thumbnail", "")
         if thumb_src and os.path.exists(thumb_src):
             img = create_rounded_cover(thumb_src, size=(164, 164), radius=12)
-            self.cover_lbl.configure(image=img)
+            try:
+                if self.winfo_exists() and self.cover_lbl.winfo_exists():
+                    self.cover_lbl.configure(image=img)
+            except Exception:
+                pass
             return
 
         v_id = self.data.get("id") or ""
@@ -371,7 +398,13 @@ class AlbumGridCard(ctk.CTkFrame):
                             f.write(r.content)
                         self.data["thumbnail"] = dest
                         new_img = create_rounded_cover(dest, size=(164, 164), radius=12)
-                        self.after(0, lambda: self.cover_lbl.configure(image=new_img))
+                        def safe_inject():
+                            try:
+                                if self.winfo_exists() and self.cover_lbl.winfo_exists():
+                                    self.cover_lbl.configure(image=new_img)
+                            except Exception:
+                                pass
+                        self.after(0, safe_inject)
                 except Exception:
                     pass
             threading.Thread(target=download_async, daemon=True).start()
@@ -551,7 +584,11 @@ class TrackTableRow(ctk.CTkFrame):
         thumb_src = self.data.get("thumbnail", "")
         if thumb_src and os.path.exists(thumb_src):
             img = create_rounded_cover(thumb_src, size=(44, 44), radius=10)
-            self.art_box.configure(image=img)
+            try:
+                if self.winfo_exists() and self.art_box.winfo_exists():
+                    self.art_box.configure(image=img)
+            except Exception:
+                pass
             return
 
         v_id = self.data.get("id") or ""
@@ -569,7 +606,13 @@ class TrackTableRow(ctk.CTkFrame):
                             f.write(r.content)
                         self.data["thumbnail"] = dest
                         new_img = create_rounded_cover(dest, size=(44, 44), radius=10)
-                        self.after(0, lambda: self.art_box.configure(image=new_img))
+                        def safe_inject():
+                            try:
+                                if self.winfo_exists() and self.art_box.winfo_exists():
+                                    self.art_box.configure(image=new_img)
+                            except Exception:
+                                pass
+                        self.after(0, safe_inject)
                 except Exception:
                     pass
             threading.Thread(target=download_async, daemon=True).start()

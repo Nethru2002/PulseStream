@@ -142,8 +142,8 @@ class StreamSearcher:
                     if not raw_title or raw_title == "Unknown Title":
                         continue
 
-                    title = raw_title
-                    artist = entry.get("uploader") or entry.get("channel") or entry.get("creator") or "Popular Artist"
+                    raw_artist = entry.get("uploader") or entry.get("channel") or entry.get("creator") or "Various Artists"
+                    title, artist = clean_track_metadata(raw_title, raw_artist)
 
                     duration = entry.get("duration", 0) or 0
                     webpage_url = f"https://www.youtube.com/watch?v={v_id}"
@@ -185,11 +185,17 @@ class StreamSearcher:
         return tracks
 
     def download_track(self, track_data, on_progress=None):
+        raw_t = track_data.get("title", "")
+        raw_a = track_data.get("artist", "")
+        title, artist = clean_track_metadata(raw_t, raw_a)
+        track_data["title"] = title
+        track_data["artist"] = artist
+
         cached_hit = self.get_cached_path(track_data)
         if cached_hit:
             return {
-                "title": track_data.get("title", "Unknown Title"),
-                "artist": track_data.get("artist", "Unknown Artist"),
+                "title": title,
+                "artist": artist,
                 "duration": track_data.get("duration", 0),
                 "path": cached_hit,
                 "url": track_data.get("url", ""),
@@ -220,8 +226,6 @@ class StreamSearcher:
                 v_id = filename
                 target_url = f"https://www.youtube.com/watch?v={v_id}"
             else:
-                title = track_data.get("title", "")
-                artist = track_data.get("artist", "")
                 target_url = f"ytsearch1:{artist} {title}".strip()
                 v_id = sanitize_filename(f"{artist}_{title}")
 
@@ -245,8 +249,8 @@ class StreamSearcher:
         if os.path.exists(target_file):
             if os.path.getsize(target_file) > 50000:
                 return {
-                    "title": track_data.get("title", "Unknown Title"),
-                    "artist": track_data.get("artist", "Unknown Artist"),
+                    "title": title,
+                    "artist": artist,
                     "duration": track_data.get("duration", 0),
                     "path": target_file,
                     "url": target_url if str(target_url).startswith("http") else f"https://www.youtube.com/watch?v={v_id}",
@@ -315,11 +319,11 @@ class StreamSearcher:
                     break
 
         if not os.path.exists(target_file):
-            raise RuntimeError(f"FFmpeg failed to assemble stream file for: {track_data.get('title', 'Unknown')}")
+            raise RuntimeError(f"FFmpeg failed to assemble stream file for: {title}")
 
         return {
-            "title": track_data.get("title", "Unknown Title"),
-            "artist": track_data.get("artist", "Unknown Artist"),
+            "title": title,
+            "artist": artist,
             "duration": track_data.get("duration", 0),
             "path": target_file,
             "url": target_url if str(target_url).startswith("http") else f"https://www.youtube.com/watch?v={v_id}",

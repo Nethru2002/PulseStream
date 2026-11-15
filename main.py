@@ -4,6 +4,7 @@ import random
 import threading
 import asyncio
 import shutil
+import datetime
 import customtkinter as ctk
 from tkinter import filedialog, messagebox, Menu
 from mutagen.mp3 import MP3
@@ -105,6 +106,7 @@ class PulseStreamStudio(ctk.CTk):
         self.nav_btns = {}
         routes = [
             ("EXPLORE", "Listen Now", "🏠"),
+            ("ANALYTICS", "Activity & Wrapped", "📊"),
             ("FAVORITES", "Favorites", "♥"),
             ("LIBRARY", "Saved Library", "📁"),
             ("HISTORY", "History", "🕒")
@@ -248,6 +250,8 @@ class PulseStreamStudio(ctk.CTk):
         )
         if self.current_tab == "EXPLORE":
             self.render_feed_shelves(self.current_feed_shelves)
+        elif self.current_tab == "ANALYTICS":
+            self.render_analytics_view()
         else:
             self.render_tracks(self.cached_display_tracks)
 
@@ -693,6 +697,10 @@ class PulseStreamStudio(ctk.CTk):
             self.add_all_btn.pack_forget()
             self.section_title.configure(text="Personalized Discovery Feed")
             self.load_personalized_feed()
+        elif tab == "ANALYTICS":
+            self.add_all_btn.pack_forget()
+            self.section_title.configure(text="Activity, Statistics & Wrapped")
+            self.render_analytics_view()
         elif tab == "FAVORITES":
             self.add_all_btn.pack_forget()
             self.section_title.configure(text="Your Favorite Songs")
@@ -723,6 +731,124 @@ class PulseStreamStudio(ctk.CTk):
             self.add_all_btn.pack_forget()
             pid = int(tab.split("_")[1])
             self.render_playlist_view(pid)
+
+    def render_analytics_view(self):
+        for w in self.track_scroll.winfo_children():
+            w.destroy()
+
+        stats = self.db.get_analytics_summary()
+
+        stat_row = ctk.CTkFrame(self.track_scroll, fg_color="transparent")
+        stat_row.pack(fill="x", pady=(0, 16))
+
+        metric_cards = [
+            ("TOTAL PLAYS", f"{stats['total_plays']:,}", "🎧"),
+            ("HOURS STREAMED", f"{stats['total_hours']} hrs", "⏳"),
+            ("TOP GENRE / VIBE", stats['top_genre'], "✨"),
+            ("LIKED SONGS", f"{stats['favorites_count']}", "♥"),
+            ("PLAYLISTS", f"{stats['playlists_count']}", "📁")
+        ]
+
+        for i, (label, val, icon) in enumerate(metric_cards):
+            card = ctk.CTkFrame(stat_row, fg_color=AppStyles.BG_CARD, corner_radius=14, border_width=1, border_color=AppStyles.BORDER_CARD, height=90)
+            card.pack(side="left", fill="both", expand=True, padx=4)
+            card.pack_propagate(False)
+
+            head_f = ctk.CTkFrame(card, fg_color="transparent")
+            head_f.pack(fill="x", padx=12, pady=(10, 2))
+            ctk.CTkLabel(head_f, text=icon, font=(AppStyles.FONT, 14)).pack(side="left")
+            ctk.CTkLabel(head_f, text=f"  {label}", font=(AppStyles.FONT, 9, "bold"), text_color=AppStyles.TEXT_MUTED).pack(side="left")
+
+            ctk.CTkLabel(card, text=val, font=(AppStyles.FONT, 15, "bold"), text_color=AppStyles.TEXT_TITLE, anchor="w").pack(fill="x", padx=12, pady=(2, 0))
+
+        all_time_box = ctk.CTkFrame(self.track_scroll, fg_color=AppStyles.BG_SURFACE, corner_radius=16, border_width=1, border_color=AppStyles.BORDER_CARD)
+        all_time_box.pack(fill="x", pady=(0, 16), padx=4)
+
+        at_inner = ctk.CTkFrame(all_time_box, fg_color="transparent")
+        at_inner.pack(fill="both", expand=True, padx=20, pady=16)
+
+        t_track = stats.get("all_time_track")
+        track_champ_f = ctk.CTkFrame(at_inner, fg_color="transparent")
+        track_champ_f.pack(side="left", fill="both", expand=True)
+
+        ctk.CTkLabel(track_champ_f, text="🏆 ALL-TIME #1 MOST PLAYED TRACK", font=(AppStyles.FONT, 10, "bold"), text_color=AppStyles.ACCENT).pack(anchor="w")
+        if t_track:
+            ctk.CTkLabel(track_champ_f, text=t_track.get("title", ""), font=(AppStyles.FONT, 16, "bold"), text_color=AppStyles.TEXT_TITLE, anchor="w", wraplength=420).pack(anchor="w", pady=(2, 0))
+            ctk.CTkLabel(track_champ_f, text=f"by {t_track.get('artist', '')}  •  {t_track.get('play_count', 0)} times streamed", font=(AppStyles.FONT, 12), text_color=AppStyles.TEXT_MUTED, anchor="w").pack(anchor="w")
+            ctk.CTkButton(track_champ_f, text="▶  Play Track", width=110, height=30, corner_radius=15, fg_color=AppStyles.ACCENT, hover_color=AppStyles.ACCENT_HOVER, text_color=AppStyles.TEXT_WHITE, font=(AppStyles.FONT, 11, "bold"), command=lambda: self.request_playback(t_track)).pack(anchor="w", pady=(8, 0))
+        else:
+            ctk.CTkLabel(track_champ_f, text="Listen to your first track to unlock", font=(AppStyles.FONT, 13), text_color=AppStyles.TEXT_MUTED).pack(anchor="w", pady=4)
+
+        t_art = stats.get("all_time_artist")
+        art_champ_f = ctk.CTkFrame(at_inner, fg_color="transparent")
+        art_champ_f.pack(side="right", fill="both", expand=True, padx=(20, 0))
+
+        ctk.CTkLabel(art_champ_f, text="👑 ALL-TIME #1 ARTIST", font=(AppStyles.FONT, 10, "bold"), text_color=AppStyles.SECONDARY).pack(anchor="w")
+        if t_art:
+            ctk.CTkLabel(art_champ_f, text=t_art.get("artist", ""), font=(AppStyles.FONT, 16, "bold"), text_color=AppStyles.TEXT_TITLE, anchor="w", wraplength=420).pack(anchor="w", pady=(2, 0))
+            ctk.CTkLabel(art_champ_f, text=f"{t_art.get('total_plays', 0)} total plays across your library", font=(AppStyles.FONT, 12), text_color=AppStyles.TEXT_MUTED, anchor="w").pack(anchor="w")
+            ctk.CTkButton(art_champ_f, text="🔍  Explore Artist", width=120, height=30, corner_radius=15, fg_color=AppStyles.BG_CARD, hover_color=AppStyles.BG_CARD_HOVER, text_color=AppStyles.TEXT_TITLE, font=(AppStyles.FONT, 11, "bold"), command=lambda: self._quick_artist_search(t_art.get("artist", ""))).pack(anchor="w", pady=(8, 0))
+        else:
+            ctk.CTkLabel(art_champ_f, text="Stream songs to rank artists", font=(AppStyles.FONT, 13), text_color=AppStyles.TEXT_MUTED).pack(anchor="w", pady=4)
+
+        leaderboard_grid = ctk.CTkFrame(self.track_scroll, fg_color="transparent")
+        leaderboard_grid.pack(fill="x", pady=(0, 16))
+
+        top5_t_frame = ctk.CTkFrame(leaderboard_grid, fg_color=AppStyles.BG_CARD, corner_radius=14, border_width=1, border_color=AppStyles.BORDER_CARD)
+        top5_t_frame.pack(side="left", fill="both", expand=True, padx=4)
+
+        ctk.CTkLabel(top5_t_frame, text="🔥 TOP 5 SONGS OF ALL TIME", font=(AppStyles.FONT, 11, "bold"), text_color=AppStyles.TEXT_TITLE).pack(anchor="w", padx=16, pady=(14, 8))
+
+        if stats["top_5_tracks"]:
+            for rank, trk in enumerate(stats["top_5_tracks"], start=1):
+                row = ctk.CTkFrame(top5_t_frame, fg_color="transparent", height=44)
+                row.pack(fill="x", padx=12, pady=2)
+                ctk.CTkLabel(row, text=f"#{rank}", width=24, font=(AppStyles.FONT, 11, "bold"), text_color=AppStyles.ACCENT).pack(side="left")
+                t_lbl = ctk.CTkLabel(row, text=f"{trk['title'][:32]} — {trk['artist'][:20]}", font=(AppStyles.FONT, 11), text_color=AppStyles.TEXT_TITLE, anchor="w")
+                t_lbl.pack(side="left", fill="x", expand=True, padx=6)
+                ctk.CTkLabel(row, text=f"{trk['play_count']} plays", font=(AppStyles.FONT, 10, "bold"), text_color=AppStyles.TEXT_MUTED).pack(side="right", padx=6)
+                ctk.CTkButton(row, text="▶", width=26, height=26, corner_radius=13, fg_color=AppStyles.BG_INPUT, hover_color=AppStyles.ACCENT, text_color=AppStyles.TEXT_TITLE, font=(AppStyles.FONT, 10, "bold"), command=lambda target_t=trk: self.request_playback(target_t)).pack(side="right")
+        else:
+            ctk.CTkLabel(top5_t_frame, text="No track history logged yet", font=(AppStyles.FONT, 11), text_color=AppStyles.TEXT_MUTED).pack(padx=16, pady=20)
+
+        top5_a_frame = ctk.CTkFrame(leaderboard_grid, fg_color=AppStyles.BG_CARD, corner_radius=14, border_width=1, border_color=AppStyles.BORDER_CARD)
+        top5_a_frame.pack(side="right", fill="both", expand=True, padx=4)
+
+        ctk.CTkLabel(top5_a_frame, text="🌟 TOP 5 ARTISTS OF ALL TIME", font=(AppStyles.FONT, 11, "bold"), text_color=AppStyles.TEXT_TITLE).pack(anchor="w", padx=16, pady=(14, 8))
+
+        if stats["top_5_artists"]:
+            for rank, art_data in enumerate(stats["top_5_artists"], start=1):
+                row = ctk.CTkFrame(top5_a_frame, fg_color="transparent", height=44)
+                row.pack(fill="x", padx=12, pady=2)
+                ctk.CTkLabel(row, text=f"#{rank}", width=24, font=(AppStyles.FONT, 11, "bold"), text_color=AppStyles.SECONDARY).pack(side="left")
+                ctk.CTkLabel(row, text=art_data['artist'][:36], font=(AppStyles.FONT, 12, "bold"), text_color=AppStyles.TEXT_TITLE, anchor="w").pack(side="left", fill="x", expand=True, padx=6)
+                ctk.CTkLabel(row, text=f"{art_data['total_plays']} plays", font=(AppStyles.FONT, 10, "bold"), text_color=AppStyles.TEXT_MUTED).pack(side="right", padx=6)
+                ctk.CTkButton(row, text="🔍", width=26, height=26, corner_radius=13, fg_color=AppStyles.BG_INPUT, hover_color=AppStyles.SECONDARY, text_color=AppStyles.TEXT_TITLE, font=(AppStyles.FONT, 10), command=lambda a_name=art_data['artist']: self._quick_artist_search(a_name)).pack(side="right")
+        else:
+            ctk.CTkLabel(top5_a_frame, text="No artist listening history yet", font=(AppStyles.FONT, 11), text_color=AppStyles.TEXT_MUTED).pack(padx=16, pady=20)
+
+        timeline_f = ctk.CTkFrame(self.track_scroll, fg_color=AppStyles.BG_CARD, corner_radius=14, border_width=1, border_color=AppStyles.BORDER_CARD)
+        timeline_f.pack(fill="x", pady=(0, 20), padx=4)
+
+        ctk.CTkLabel(timeline_f, text="🕒 RECENT STREAMING TIMELINE (EXACT SESSIONS)", font=(AppStyles.FONT, 11, "bold"), text_color=AppStyles.TEXT_TITLE).pack(anchor="w", padx=16, pady=(14, 8))
+
+        if stats["recent_logs"]:
+            for item in stats["recent_logs"]:
+                ts_str = datetime.datetime.fromtimestamp(item["played_at"]).strftime("%b %d, %Y • %I:%M %p")
+                row = ctk.CTkFrame(timeline_f, fg_color="transparent", height=40)
+                row.pack(fill="x", padx=14, pady=2)
+                ctk.CTkLabel(row, text="🎵", font=(AppStyles.FONT, 11)).pack(side="left", padx=(0, 6))
+                ctk.CTkLabel(row, text=item['title'][:44], font=(AppStyles.FONT, 11, "bold"), text_color=AppStyles.TEXT_TITLE, anchor="w").pack(side="left")
+                ctk.CTkLabel(row, text=f" — {item['artist'][:26]}", font=(AppStyles.FONT, 11), text_color=AppStyles.TEXT_MUTED, anchor="w").pack(side="left")
+                ctk.CTkLabel(row, text=ts_str, font=(AppStyles.FONT, 10), text_color=AppStyles.TEXT_FAINT).pack(side="right")
+                ctk.CTkButton(row, text="▶", width=24, height=24, corner_radius=12, fg_color=AppStyles.BG_INPUT, hover_color=AppStyles.ACCENT, text_color=AppStyles.TEXT_TITLE, font=(AppStyles.FONT, 9, "bold"), command=lambda t_data=item: self.request_playback(t_data)).pack(side="right", padx=10)
+        else:
+            ctk.CTkLabel(timeline_f, text="Your recent playback sessions will appear here in chronological order.", font=(AppStyles.FONT, 11), text_color=AppStyles.TEXT_MUTED).pack(padx=16, pady=20)
+
+    def _quick_artist_search(self, artist_name):
+        self.navigate("EXPLORE")
+        self.search_bar.set_text(artist_name)
+        self.handle_query_search()
 
     def load_personalized_feed(self):
         instant_shelves = self.feed_engine.get_instant_feed()
