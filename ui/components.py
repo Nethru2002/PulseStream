@@ -4,8 +4,9 @@ import threading
 import requests
 import customtkinter as ctk
 from tkinter import Canvas, Menu
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageDraw, ImageOps, ImageFilter
 from ui.styles import AppStyles
+from ui.icons import get_icon
 from utils.helpers import format_time
 
 def create_rounded_cover(image_path_or_obj, size=(50, 50), radius=10):
@@ -13,11 +14,11 @@ def create_rounded_cover(image_path_or_obj, size=(50, 50), radius=10):
         if isinstance(image_path_or_obj, str):
             p = image_path_or_obj.strip()
             if not p or not os.path.exists(p):
-                img = Image.new("RGBA", size, color="#1A1D2B")
+                img = Image.new("RGBA", size, color="#12141C")
             else:
                 img = Image.open(p).convert("RGBA")
         elif image_path_or_obj is None:
-            img = Image.new("RGBA", size, color="#1A1D2B")
+            img = Image.new("RGBA", size, color="#12141C")
         else:
             img = image_path_or_obj.convert("RGBA")
 
@@ -29,8 +30,25 @@ def create_rounded_cover(image_path_or_obj, size=(50, 50), radius=10):
         rounded.paste(img, (0, 0), mask=mask)
         return ctk.CTkImage(light_image=rounded, dark_image=rounded, size=size)
     except Exception:
-        fallback = Image.new("RGBA", size, color="#1A1D2B")
+        fallback = Image.new("RGBA", size, color="#12141C")
         return ctk.CTkImage(light_image=fallback, dark_image=fallback, size=size)
+
+def generate_ambient_mesh(image_path, size=(600, 200)):
+    try:
+        if not image_path or not os.path.exists(image_path):
+            base = Image.new("RGBA", size, color="#151822")
+            return ctk.CTkImage(light_image=base, dark_image=base, size=size)
+
+        src = Image.open(image_path).convert("RGBA")
+        thumb = src.resize((30, 30), Image.Resampling.BOX)
+        blurred = thumb.resize(size, Image.Resampling.BICUBIC).filter(ImageFilter.GaussianBlur(radius=40))
+
+        tint = Image.new("RGBA", size, (7, 8, 11, 215))
+        composed = Image.alpha_composite(blurred, tint)
+        return ctk.CTkImage(light_image=composed, dark_image=composed, size=size)
+    except Exception:
+        base = Image.new("RGBA", size, color="#151822")
+        return ctk.CTkImage(light_image=base, dark_image=base, size=size)
 
 class AnimatedVisualizer(Canvas):
     def __init__(self, master, width=80, height=24, bar_count=7, **kwargs):
@@ -75,10 +93,10 @@ class HeroShowcase(ctk.CTkFrame):
         super().__init__(
             master,
             fg_color=AppStyles.BG_SURFACE,
-            corner_radius=20,
+            corner_radius=22,
             border_width=1,
             border_color=AppStyles.BORDER_CARD,
-            height=200,
+            height=205,
             **kwargs
         )
         self.pack_propagate(False)
@@ -86,15 +104,18 @@ class HeroShowcase(ctk.CTkFrame):
         self.fav_callback = fav_callback
         self.current_data = None
 
+        self.backdrop_lbl = ctk.CTkLabel(self, text="", image=generate_ambient_mesh("", size=(950, 205)))
+        self.backdrop_lbl.place(x=0, y=0, relwidth=1.0, relheight=1.0)
+
         inner = ctk.CTkFrame(self, fg_color="transparent")
-        inner.pack(fill="both", expand=True, padx=24, pady=18)
+        inner.pack(fill="both", expand=True, padx=28, pady=20)
 
         self.cover_lbl = ctk.CTkLabel(
             inner,
             text="",
-            image=create_rounded_cover("", size=(140, 140), radius=16),
-            width=140,
-            height=140
+            image=create_rounded_cover("", size=(144, 144), radius=18),
+            width=144,
+            height=144
         )
         self.cover_lbl.pack(side="left", padx=(0, 24))
 
@@ -103,7 +124,7 @@ class HeroShowcase(ctk.CTkFrame):
 
         ctk.CTkLabel(
             meta,
-            text="FEATURED TRACK",
+            text="FEATURED SELECTION",
             font=(AppStyles.FONT, 10, "bold"),
             text_color=AppStyles.ACCENT
         ).pack(anchor="w")
@@ -111,7 +132,7 @@ class HeroShowcase(ctk.CTkFrame):
         self.title_lbl = ctk.CTkLabel(
             meta,
             text="Welcome to PulseStream",
-            font=(AppStyles.FONT, 18, "bold"),
+            font=(AppStyles.FONT, 20, "bold"),
             text_color=AppStyles.TEXT_TITLE,
             anchor="w",
             wraplength=580,
@@ -128,34 +149,38 @@ class HeroShowcase(ctk.CTkFrame):
             wraplength=580,
             justify="left"
         )
-        self.artist_lbl.pack(anchor="w", pady=(0, 14), fill="x")
+        self.artist_lbl.pack(anchor="w", pady=(0, 16), fill="x")
 
         action_row = ctk.CTkFrame(meta, fg_color="transparent")
         action_row.pack(anchor="w")
 
         self.play_btn = ctk.CTkButton(
             action_row,
-            text="▶  Play Now",
+            text=" Play Now",
+            image=get_icon("play", size=(14, 14), color=AppStyles.TEXT_WHITE),
+            compound="left",
             width=130,
-            height=36,
-            corner_radius=18,
+            height=38,
+            corner_radius=19,
             fg_color=AppStyles.ACCENT,
             text_color=AppStyles.TEXT_WHITE,
             hover_color=AppStyles.ACCENT_HOVER,
             font=(AppStyles.FONT, 12, "bold"),
             command=self._on_play
         )
-        self.play_btn.pack(side="left", padx=(0, 10))
+        self.play_btn.pack(side="left", padx=(0, 12))
 
         self.fav_btn = ctk.CTkButton(
             action_row,
-            text="♡  Favorite",
-            width=110,
-            height=36,
-            corner_radius=18,
+            text=" Favorite",
+            image=get_icon("heart_outline", size=(15, 15), color=AppStyles.TEXT_BODY),
+            compound="left",
+            width=120,
+            height=38,
+            corner_radius=19,
             fg_color=AppStyles.BG_CARD,
             hover_color=AppStyles.BG_CARD_HOVER,
-            text_color=AppStyles.TEXT_WHITE,
+            text_color=AppStyles.TEXT_BODY,
             font=(AppStyles.FONT, 12, "bold"),
             command=self._on_fav
         )
@@ -169,17 +194,21 @@ class HeroShowcase(ctk.CTkFrame):
         thumb_src = track_data.get("thumbnail", "")
         self._resolve_and_set_thumb(thumb_src)
 
+        heart_icon = get_icon("heart_filled", size=(15, 15), color=AppStyles.ACCENT) if is_fav else get_icon("heart_outline", size=(15, 15), color=AppStyles.TEXT_BODY)
         self.fav_btn.configure(
-            text="♥  Liked" if is_fav else "♡  Favorite",
-            text_color=AppStyles.ACCENT if is_fav else AppStyles.TEXT_WHITE
+            text=" Liked" if is_fav else " Favorite",
+            image=heart_icon,
+            text_color=AppStyles.ACCENT if is_fav else AppStyles.TEXT_BODY
         )
 
     def _resolve_and_set_thumb(self, thumb_src):
         if thumb_src and os.path.exists(thumb_src):
-            img = create_rounded_cover(thumb_src, size=(140, 140), radius=16)
+            img = create_rounded_cover(thumb_src, size=(144, 144), radius=18)
+            ambient = generate_ambient_mesh(thumb_src, size=(950, 205))
             try:
                 if self.winfo_exists() and self.cover_lbl.winfo_exists():
                     self.cover_lbl.configure(image=img)
+                    self.backdrop_lbl.configure(image=ambient)
             except Exception:
                 pass
         elif thumb_src and str(thumb_src).startswith("http"):
@@ -192,11 +221,13 @@ class HeroShowcase(ctk.CTkFrame):
                         with open(local_file, "wb") as f:
                             f.write(r.content)
                         self.current_data["thumbnail"] = local_file
-                        new_img = create_rounded_cover(local_file, size=(140, 140), radius=16)
+                        new_img = create_rounded_cover(local_file, size=(144, 144), radius=18)
+                        ambient = generate_ambient_mesh(local_file, size=(950, 205))
                         def safe_update():
                             try:
                                 if self.winfo_exists() and self.cover_lbl.winfo_exists():
                                     self.cover_lbl.configure(image=new_img)
+                                    self.backdrop_lbl.configure(image=ambient)
                             except Exception:
                                 pass
                         self.after(0, safe_update)
@@ -206,7 +237,8 @@ class HeroShowcase(ctk.CTkFrame):
         else:
             try:
                 if self.winfo_exists() and self.cover_lbl.winfo_exists():
-                    self.cover_lbl.configure(image=create_rounded_cover("", size=(140, 140), radius=16))
+                    self.cover_lbl.configure(image=create_rounded_cover("", size=(144, 144), radius=18))
+                    self.backdrop_lbl.configure(image=generate_ambient_mesh("", size=(950, 205)))
             except Exception:
                 pass
 
@@ -217,9 +249,11 @@ class HeroShowcase(ctk.CTkFrame):
     def _on_fav(self):
         if self.current_data and self.fav_callback:
             is_now_fav = self.fav_callback(self.current_data)
+            heart_icon = get_icon("heart_filled", size=(15, 15), color=AppStyles.ACCENT) if is_now_fav else get_icon("heart_outline", size=(15, 15), color=AppStyles.TEXT_BODY)
             self.fav_btn.configure(
-                text="♥  Liked" if is_now_fav else "♡  Favorite",
-                text_color=AppStyles.ACCENT if is_now_fav else AppStyles.TEXT_WHITE
+                text=" Liked" if is_now_fav else " Favorite",
+                image=heart_icon,
+                text_color=AppStyles.ACCENT if is_now_fav else AppStyles.TEXT_BODY
             )
 
 class AlbumGridCard(ctk.CTkFrame):
@@ -227,7 +261,7 @@ class AlbumGridCard(ctk.CTkFrame):
         super().__init__(
             master,
             fg_color=AppStyles.BG_CARD,
-            corner_radius=16,
+            corner_radius=18,
             border_width=1,
             border_color=AppStyles.BORDER_CARD,
             width=188,
@@ -241,14 +275,14 @@ class AlbumGridCard(ctk.CTkFrame):
         self.menu_cmd = menu_cmd
         self.is_fav = is_fav
 
-        self.art_wrap = ctk.CTkFrame(self, width=164, height=164, corner_radius=12, fg_color="#181B28")
+        self.art_wrap = ctk.CTkFrame(self, width=164, height=164, corner_radius=14, fg_color="#181B28")
         self.art_wrap.pack(padx=12, pady=(12, 8))
         self.art_wrap.pack_propagate(False)
 
         self.cover_lbl = ctk.CTkLabel(
             self.art_wrap,
             text="",
-            image=create_rounded_cover("", size=(164, 164), radius=12),
+            image=create_rounded_cover("", size=(164, 164), radius=14),
             width=164,
             height=164
         )
@@ -290,42 +324,40 @@ class AlbumGridCard(ctk.CTkFrame):
 
         self.play_btn = ctk.CTkButton(
             self.actions,
-            text="▶",
+            text="",
+            image=get_icon("play", size=(14, 14), color=AppStyles.TEXT_WHITE),
             width=36,
             height=36,
             corner_radius=18,
             fg_color=AppStyles.ACCENT,
             hover_color=AppStyles.ACCENT_HOVER,
-            text_color=AppStyles.TEXT_WHITE,
-            font=(AppStyles.FONT, 13, "bold"),
             command=lambda: self.play_cmd(self.data)
         )
         self.play_btn.pack(side="left")
 
+        fav_icon = get_icon("heart_filled", size=(15, 15), color=AppStyles.ACCENT) if self.is_fav else get_icon("heart_outline", size=(15, 15), color=AppStyles.TEXT_MUTED)
         self.fav_btn = ctk.CTkButton(
             self.actions,
-            text="♥" if self.is_fav else "♡",
+            text="",
+            image=fav_icon,
             width=34,
             height=34,
             corner_radius=17,
             fg_color="transparent",
             hover_color=AppStyles.BG_CARD_HOVER,
-            text_color=AppStyles.ACCENT if self.is_fav else AppStyles.TEXT_MUTED,
-            font=(AppStyles.FONT, 15),
             command=self._on_fav_click
         )
         self.fav_btn.pack(side="right")
 
         self.opt_btn = ctk.CTkButton(
             self.actions,
-            text="⋮",
+            text="",
+            image=get_icon("more", size=(14, 14), color=AppStyles.TEXT_MUTED),
             width=30,
             height=34,
             corner_radius=15,
             fg_color="transparent",
             hover_color=AppStyles.BG_CARD_HOVER,
-            text_color=AppStyles.TEXT_MUTED,
-            font=(AppStyles.FONT, 16, "bold"),
             command=lambda: self.menu_cmd(self.data, self.opt_btn.winfo_rootx(), self.opt_btn.winfo_rooty() + self.opt_btn.winfo_height())
         )
         self.opt_btn.pack(side="right", padx=2)
@@ -375,7 +407,7 @@ class AlbumGridCard(ctk.CTkFrame):
     def _load_thumbnail(self):
         thumb_src = self.data.get("thumbnail", "")
         if thumb_src and os.path.exists(thumb_src):
-            img = create_rounded_cover(thumb_src, size=(164, 164), radius=12)
+            img = create_rounded_cover(thumb_src, size=(164, 164), radius=14)
             try:
                 if self.winfo_exists() and self.cover_lbl.winfo_exists():
                     self.cover_lbl.configure(image=img)
@@ -397,7 +429,7 @@ class AlbumGridCard(ctk.CTkFrame):
                         with open(dest, "wb") as f:
                             f.write(r.content)
                         self.data["thumbnail"] = dest
-                        new_img = create_rounded_cover(dest, size=(164, 164), radius=12)
+                        new_img = create_rounded_cover(dest, size=(164, 164), radius=14)
                         def safe_inject():
                             try:
                                 if self.winfo_exists() and self.cover_lbl.winfo_exists():
@@ -412,10 +444,8 @@ class AlbumGridCard(ctk.CTkFrame):
     def _on_fav_click(self):
         new_val = self.fav_cmd(self.data)
         self.is_fav = new_val
-        self.fav_btn.configure(
-            text="♥" if new_val else "♡",
-            text_color=AppStyles.ACCENT if new_val else AppStyles.TEXT_MUTED
-        )
+        fav_icon = get_icon("heart_filled", size=(15, 15), color=AppStyles.ACCENT) if new_val else get_icon("heart_outline", size=(15, 15), color=AppStyles.TEXT_MUTED)
+        self.fav_btn.configure(image=fav_icon)
 
 class TrackTableRow(ctk.CTkFrame):
     def __init__(self, master, idx, data, play_cmd, fav_cmd, save_cmd, del_cmd, is_fav=False, **kwargs):
@@ -498,14 +528,13 @@ class TrackTableRow(ctk.CTkFrame):
 
         self.opt_btn = ctk.CTkButton(
             self,
-            text="⋮",
+            text="",
+            image=get_icon("more", size=(14, 14), color=AppStyles.TEXT_MUTED),
             width=28,
             height=28,
             corner_radius=14,
             fg_color="transparent",
             hover_color=AppStyles.BG_INPUT,
-            text_color=AppStyles.TEXT_MUTED,
-            font=(AppStyles.FONT, 16, "bold"),
             command=self._show_menu_from_btn
         )
         self.opt_btn.pack(side="right", padx=(2, 12))
@@ -534,42 +563,40 @@ class TrackTableRow(ctk.CTkFrame):
         if data.get("source") == "STREAM":
             dl_btn = ctk.CTkButton(
                 self,
-                text="↓",
+                text="",
+                image=get_icon("download", size=(13, 13), color=AppStyles.TEXT_BODY),
                 width=28,
                 height=28,
                 corner_radius=14,
                 fg_color="transparent",
                 hover_color=AppStyles.BG_INPUT,
-                text_color=AppStyles.TEXT_BODY,
-                font=(AppStyles.FONT, 14, "bold"),
                 command=lambda: self.save_cmd(self.data)
             )
             dl_btn.pack(side="right", padx=3)
 
+        fav_icon = get_icon("heart_filled", size=(15, 15), color=AppStyles.ACCENT) if self.is_fav else get_icon("heart_outline", size=(15, 15), color=AppStyles.TEXT_MUTED)
         self.fav_btn = ctk.CTkButton(
             self,
-            text="♥" if self.is_fav else "♡",
+            text="",
+            image=fav_icon,
             width=28,
             height=28,
             corner_radius=14,
             fg_color="transparent",
             hover_color=AppStyles.BG_INPUT,
-            text_color=AppStyles.ACCENT if self.is_fav else AppStyles.TEXT_MUTED,
-            font=(AppStyles.FONT, 14),
             command=self._on_fav_toggle
         )
         self.fav_btn.pack(side="right", padx=3)
 
         play_act = ctk.CTkButton(
             self,
-            text="▶",
+            text="",
+            image=get_icon("play", size=(13, 13), color=AppStyles.TEXT_TITLE),
             width=32,
             height=32,
             corner_radius=16,
             fg_color=AppStyles.BG_INPUT,
             hover_color=AppStyles.ACCENT,
-            text_color=AppStyles.TEXT_TITLE,
-            font=(AppStyles.FONT, 12, "bold"),
             command=lambda: self.play_cmd(self.data)
         )
         play_act.pack(side="right", padx=6)
@@ -625,10 +652,8 @@ class TrackTableRow(ctk.CTkFrame):
     def _on_fav_toggle(self):
         new_val = self.fav_cmd(self.data)
         self.is_fav = new_val
-        self.fav_btn.configure(
-            text="♥" if new_val else "♡",
-            text_color=AppStyles.ACCENT if new_val else AppStyles.TEXT_MUTED
-        )
+        fav_icon = get_icon("heart_filled", size=(15, 15), color=AppStyles.ACCENT) if new_val else get_icon("heart_outline", size=(15, 15), color=AppStyles.TEXT_MUTED)
+        self.fav_btn.configure(image=fav_icon)
 
 class ModernSearchArea(ctk.CTkFrame):
     def __init__(self, master, search_callback, **kwargs):
@@ -646,8 +671,8 @@ class ModernSearchArea(ctk.CTkFrame):
 
         ctk.CTkLabel(
             self.box,
-            text="🔍",
-            font=(AppStyles.FONT, 13)
+            text="",
+            image=get_icon("search", size=(16, 16), color=AppStyles.TEXT_MUTED)
         ).pack(side="left", padx=(16, 8))
 
         self.entry = ctk.CTkEntry(

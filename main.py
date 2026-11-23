@@ -17,6 +17,7 @@ from services.db import DatabaseManager
 from services.lyrics import LyricsService
 from services.feed import FeedEngine
 from ui.styles import AppStyles
+from ui.icons import get_icon
 from ui.components import (
     SidebarNavButton,
     TrackTableRow,
@@ -24,7 +25,8 @@ from ui.components import (
     HeroShowcase,
     ModernSearchArea,
     AnimatedVisualizer,
-    create_rounded_cover
+    create_rounded_cover,
+    generate_ambient_mesh
 )
 from utils.helpers import ensure_dir, format_time, sanitize_filename
 
@@ -74,7 +76,7 @@ class PulseStreamStudio(ctk.CTk):
         self.grid_columnconfigure(1, weight=1)
         self.grid_columnconfigure(2, weight=0, minsize=320)
         self.grid_rowconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=0, minsize=94)
+        self.grid_rowconfigure(1, weight=0, minsize=104)
 
         self.sidebar = ctk.CTkScrollableFrame(
             self,
@@ -357,29 +359,33 @@ class PulseStreamStudio(ctk.CTk):
         self.lyric_widgets = []
 
     def setup_bottom_player(self):
+        dock_container = ctk.CTkFrame(self, fg_color="transparent", height=104)
+        dock_container.grid(row=1, column=0, columnspan=3, sticky="nsew", padx=20, pady=(0, 14))
+        dock_container.pack_propagate(False)
+
         self.dock = ctk.CTkFrame(
-            self,
-            height=94,
+            dock_container,
+            height=90,
             fg_color=AppStyles.BG_DECK,
-            corner_radius=0,
+            corner_radius=26,
             border_width=1,
-            border_color=AppStyles.BORDER_SUBTLE
+            border_color=AppStyles.BORDER_CARD
         )
-        self.dock.grid(row=1, column=0, columnspan=3, sticky="nsew")
+        self.dock.pack(fill="both", expand=True)
         self.dock.pack_propagate(False)
 
-        left_pane = ctk.CTkFrame(self.dock, fg_color="transparent", width=360)
-        left_pane.pack(side="left", fill="y", padx=(18, 0))
+        left_pane = ctk.CTkFrame(self.dock, fg_color="transparent", width=340)
+        left_pane.pack(side="left", fill="y", padx=(16, 0))
         left_pane.pack_propagate(False)
 
         self.dock_art = ctk.CTkLabel(
             left_pane,
             text="",
-            image=create_rounded_cover("", size=(54, 54), radius=12),
-            width=54,
-            height=54
+            image=create_rounded_cover("", size=(56, 56), radius=14),
+            width=56,
+            height=56
         )
-        self.dock_art.pack(side="left", pady=18)
+        self.dock_art.pack(side="left", pady=16)
 
         meta_box = ctk.CTkFrame(left_pane, fg_color="transparent")
         meta_box.pack(side="left", fill="both", expand=True, padx=(12, 6), pady=22)
@@ -390,7 +396,7 @@ class PulseStreamStudio(ctk.CTk):
             font=(AppStyles.FONT, 13, "bold"),
             text_color=AppStyles.TEXT_TITLE,
             anchor="w",
-            wraplength=250,
+            wraplength=230,
             justify="left"
         )
         self.dock_title_lbl.pack(fill="x")
@@ -401,55 +407,52 @@ class PulseStreamStudio(ctk.CTk):
             font=(AppStyles.FONT, 11),
             text_color=AppStyles.TEXT_MUTED,
             anchor="w",
-            wraplength=250,
+            wraplength=230,
             justify="left"
         )
         self.dock_sub_lbl.pack(fill="x")
 
         self.dock_fav_btn = ctk.CTkButton(
             left_pane,
-            text="♡",
+            text="",
+            image=get_icon("heart_outline", size=(16, 16), color=AppStyles.TEXT_MUTED),
             width=32,
             height=32,
             corner_radius=16,
             fg_color="transparent",
             hover_color=AppStyles.BG_CARD_HOVER,
-            text_color=AppStyles.TEXT_MUTED,
-            font=(AppStyles.FONT, 16),
             command=self._on_dock_fav_toggle
         )
         self.dock_fav_btn.pack(side="left", padx=4)
 
-        right_pane = ctk.CTkFrame(self.dock, fg_color="transparent", width=310)
+        right_pane = ctk.CTkFrame(self.dock, fg_color="transparent", width=300)
         right_pane.pack(side="right", fill="y", padx=(0, 20))
         right_pane.pack_propagate(False)
 
-        self.visualizer = AnimatedVisualizer(right_pane, width=80, height=24, bar_count=7)
+        self.visualizer = AnimatedVisualizer(right_pane, width=76, height=22, bar_count=7)
         self.visualizer.pack(side="left", padx=(6, 12), pady=34)
 
         ctk.CTkButton(
             right_pane,
-            text="◨",
-            width=30,
-            height=30,
-            corner_radius=15,
+            text="",
+            image=get_icon("drawer", size=(15, 15), color=AppStyles.TEXT_BODY),
+            width=32,
+            height=32,
+            corner_radius=16,
             fg_color="transparent",
             hover_color=AppStyles.BG_CARD_HOVER,
-            text_color=AppStyles.TEXT_BODY,
-            font=(AppStyles.FONT, 14),
             command=self.toggle_drawer
         ).pack(side="left", padx=4)
 
         ctk.CTkLabel(
             right_pane,
-            text="🔊",
-            font=(AppStyles.FONT, 11),
-            text_color=AppStyles.TEXT_MUTED
+            text="",
+            image=get_icon("volume", size=(15, 15), color=AppStyles.TEXT_MUTED)
         ).pack(side="left", padx=(8, 4))
 
         self.vol_slider = ctk.CTkSlider(
             right_pane,
-            width=92,
+            width=90,
             height=5,
             progress_color=AppStyles.ACCENT,
             fg_color="#202434",
@@ -466,72 +469,67 @@ class PulseStreamStudio(ctk.CTk):
         center_pane.pack(side="left", fill="both", expand=True, padx=16)
 
         button_row = ctk.CTkFrame(center_pane, fg_color="transparent")
-        button_row.pack(side="top", pady=(12, 2))
+        button_row.pack(side="top", pady=(10, 2))
 
         self.shuf_btn = ctk.CTkButton(
             button_row,
-            text="🔀",
+            text="",
+            image=get_icon("shuffle", size=(14, 14), color=AppStyles.TEXT_MUTED),
             width=32,
             height=32,
             corner_radius=16,
             fg_color="transparent",
             hover_color=AppStyles.BG_CARD_HOVER,
-            text_color=AppStyles.TEXT_MUTED,
-            font=(AppStyles.FONT, 13),
             command=self.toggle_shuffle
         )
         self.shuf_btn.pack(side="left", padx=6)
 
         ctk.CTkButton(
             button_row,
-            text="⏮",
-            width=36,
-            height=36,
-            corner_radius=18,
+            text="",
+            image=get_icon("prev", size=(14, 14), color=AppStyles.TEXT_TITLE),
+            width=34,
+            height=34,
+            corner_radius=17,
             fg_color="transparent",
             hover_color=AppStyles.BG_CARD_HOVER,
-            text_color=AppStyles.TEXT_TITLE,
-            font=(AppStyles.FONT, 16),
             command=self.prev_track
         ).pack(side="left", padx=4)
 
         self.main_play_btn = ctk.CTkButton(
             button_row,
-            text="▶",
+            text="",
+            image=get_icon("play", size=(16, 16), color=AppStyles.TEXT_WHITE),
             width=42,
             height=42,
             corner_radius=21,
             fg_color=AppStyles.ACCENT,
-            text_color=AppStyles.TEXT_WHITE,
             hover_color=AppStyles.ACCENT_HOVER,
-            font=(AppStyles.FONT, 15, "bold"),
             command=self.toggle_play_state
         )
         self.main_play_btn.pack(side="left", padx=12)
 
         ctk.CTkButton(
             button_row,
-            text="⏭",
-            width=36,
-            height=36,
-            corner_radius=18,
+            text="",
+            image=get_icon("next", size=(14, 14), color=AppStyles.TEXT_TITLE),
+            width=34,
+            height=34,
+            corner_radius=17,
             fg_color="transparent",
             hover_color=AppStyles.BG_CARD_HOVER,
-            text_color=AppStyles.TEXT_TITLE,
-            font=(AppStyles.FONT, 16),
             command=self.next_track
         ).pack(side="left", padx=4)
 
         self.rep_btn = ctk.CTkButton(
             button_row,
-            text="🔁",
+            text="",
+            image=get_icon("repeat", size=(14, 14), color=AppStyles.TEXT_MUTED),
             width=32,
             height=32,
             corner_radius=16,
             fg_color="transparent",
             hover_color=AppStyles.BG_CARD_HOVER,
-            text_color=AppStyles.TEXT_MUTED,
-            font=(AppStyles.FONT, 13),
             command=self.toggle_repeat
         )
         self.rep_btn.pack(side="left", padx=6)
@@ -667,10 +665,8 @@ class PulseStreamStudio(ctk.CTk):
         if not self.current_track:
             return
         is_now_fav = self.toggle_favorite(self.current_track)
-        self.dock_fav_btn.configure(
-            text="♥" if is_now_fav else "♡",
-            text_color=AppStyles.ACCENT if is_now_fav else AppStyles.TEXT_MUTED
-        )
+        fav_icon = get_icon("heart_filled", size=(16, 16), color=AppStyles.ACCENT) if is_now_fav else get_icon("heart_outline", size=(16, 16), color=AppStyles.TEXT_MUTED)
+        self.dock_fav_btn.configure(image=fav_icon)
 
     def toggle_drawer(self):
         if self.is_drawer_visible:
@@ -775,7 +771,7 @@ class PulseStreamStudio(ctk.CTk):
         if t_track:
             ctk.CTkLabel(track_champ_f, text=t_track.get("title", ""), font=(AppStyles.FONT, 16, "bold"), text_color=AppStyles.TEXT_TITLE, anchor="w", wraplength=420).pack(anchor="w", pady=(2, 0))
             ctk.CTkLabel(track_champ_f, text=f"by {t_track.get('artist', '')}  •  {t_track.get('play_count', 0)} times streamed", font=(AppStyles.FONT, 12), text_color=AppStyles.TEXT_MUTED, anchor="w").pack(anchor="w")
-            ctk.CTkButton(track_champ_f, text="▶  Play Track", width=110, height=30, corner_radius=15, fg_color=AppStyles.ACCENT, hover_color=AppStyles.ACCENT_HOVER, text_color=AppStyles.TEXT_WHITE, font=(AppStyles.FONT, 11, "bold"), command=lambda: self.request_playback(t_track)).pack(anchor="w", pady=(8, 0))
+            ctk.CTkButton(track_champ_f, text=" Play Track", image=get_icon("play", size=(12, 12), color=AppStyles.TEXT_WHITE), compound="left", width=120, height=32, corner_radius=16, fg_color=AppStyles.ACCENT, hover_color=AppStyles.ACCENT_HOVER, text_color=AppStyles.TEXT_WHITE, font=(AppStyles.FONT, 11, "bold"), command=lambda: self.request_playback(t_track)).pack(anchor="w", pady=(8, 0))
         else:
             ctk.CTkLabel(track_champ_f, text="Listen to your first track to unlock", font=(AppStyles.FONT, 13), text_color=AppStyles.TEXT_MUTED).pack(anchor="w", pady=4)
 
@@ -787,7 +783,7 @@ class PulseStreamStudio(ctk.CTk):
         if t_art:
             ctk.CTkLabel(art_champ_f, text=t_art.get("artist", ""), font=(AppStyles.FONT, 16, "bold"), text_color=AppStyles.TEXT_TITLE, anchor="w", wraplength=420).pack(anchor="w", pady=(2, 0))
             ctk.CTkLabel(art_champ_f, text=f"{t_art.get('total_plays', 0)} total plays across your library", font=(AppStyles.FONT, 12), text_color=AppStyles.TEXT_MUTED, anchor="w").pack(anchor="w")
-            ctk.CTkButton(art_champ_f, text="🔍  Explore Artist", width=120, height=30, corner_radius=15, fg_color=AppStyles.BG_CARD, hover_color=AppStyles.BG_CARD_HOVER, text_color=AppStyles.TEXT_TITLE, font=(AppStyles.FONT, 11, "bold"), command=lambda: self._quick_artist_search(t_art.get("artist", ""))).pack(anchor="w", pady=(8, 0))
+            ctk.CTkButton(art_champ_f, text=" Explore Artist", image=get_icon("search", size=(12, 12), color=AppStyles.TEXT_TITLE), compound="left", width=130, height=32, corner_radius=16, fg_color=AppStyles.BG_CARD, hover_color=AppStyles.BG_CARD_HOVER, text_color=AppStyles.TEXT_TITLE, font=(AppStyles.FONT, 11, "bold"), command=lambda: self._quick_artist_search(t_art.get("artist", ""))).pack(anchor="w", pady=(8, 0))
         else:
             ctk.CTkLabel(art_champ_f, text="Stream songs to rank artists", font=(AppStyles.FONT, 13), text_color=AppStyles.TEXT_MUTED).pack(anchor="w", pady=4)
 
@@ -797,7 +793,7 @@ class PulseStreamStudio(ctk.CTk):
         top5_t_frame = ctk.CTkFrame(leaderboard_grid, fg_color=AppStyles.BG_CARD, corner_radius=14, border_width=1, border_color=AppStyles.BORDER_CARD)
         top5_t_frame.pack(side="left", fill="both", expand=True, padx=4)
 
-        ctk.CTkLabel(top5_t_frame, text="🔥 TOP 5 SONGS OF ALL TIME", font=(AppStyles.FONT, 11, "bold"), text_color=AppStyles.TEXT_TITLE).pack(anchor="w", padx=16, pady=(14, 8))
+        ctk.CTkLabel(top5_t_frame, text="TOP 5 SONGS OF ALL TIME", font=(AppStyles.FONT, 11, "bold"), text_color=AppStyles.TEXT_TITLE).pack(anchor="w", padx=16, pady=(14, 8))
 
         if stats["top_5_tracks"]:
             for rank, trk in enumerate(stats["top_5_tracks"], start=1):
@@ -807,14 +803,14 @@ class PulseStreamStudio(ctk.CTk):
                 t_lbl = ctk.CTkLabel(row, text=f"{trk['title'][:32]} — {trk['artist'][:20]}", font=(AppStyles.FONT, 11), text_color=AppStyles.TEXT_TITLE, anchor="w")
                 t_lbl.pack(side="left", fill="x", expand=True, padx=6)
                 ctk.CTkLabel(row, text=f"{trk['play_count']} plays", font=(AppStyles.FONT, 10, "bold"), text_color=AppStyles.TEXT_MUTED).pack(side="right", padx=6)
-                ctk.CTkButton(row, text="▶", width=26, height=26, corner_radius=13, fg_color=AppStyles.BG_INPUT, hover_color=AppStyles.ACCENT, text_color=AppStyles.TEXT_TITLE, font=(AppStyles.FONT, 10, "bold"), command=lambda target_t=trk: self.request_playback(target_t)).pack(side="right")
+                ctk.CTkButton(row, text="", image=get_icon("play", size=(10, 10), color=AppStyles.TEXT_TITLE), width=26, height=26, corner_radius=13, fg_color=AppStyles.BG_INPUT, hover_color=AppStyles.ACCENT, command=lambda target_t=trk: self.request_playback(target_t)).pack(side="right")
         else:
             ctk.CTkLabel(top5_t_frame, text="No track history logged yet", font=(AppStyles.FONT, 11), text_color=AppStyles.TEXT_MUTED).pack(padx=16, pady=20)
 
         top5_a_frame = ctk.CTkFrame(leaderboard_grid, fg_color=AppStyles.BG_CARD, corner_radius=14, border_width=1, border_color=AppStyles.BORDER_CARD)
         top5_a_frame.pack(side="right", fill="both", expand=True, padx=4)
 
-        ctk.CTkLabel(top5_a_frame, text="🌟 TOP 5 ARTISTS OF ALL TIME", font=(AppStyles.FONT, 11, "bold"), text_color=AppStyles.TEXT_TITLE).pack(anchor="w", padx=16, pady=(14, 8))
+        ctk.CTkLabel(top5_a_frame, text="TOP 5 ARTISTS OF ALL TIME", font=(AppStyles.FONT, 11, "bold"), text_color=AppStyles.TEXT_TITLE).pack(anchor="w", padx=16, pady=(14, 8))
 
         if stats["top_5_artists"]:
             for rank, art_data in enumerate(stats["top_5_artists"], start=1):
@@ -823,25 +819,24 @@ class PulseStreamStudio(ctk.CTk):
                 ctk.CTkLabel(row, text=f"#{rank}", width=24, font=(AppStyles.FONT, 11, "bold"), text_color=AppStyles.SECONDARY).pack(side="left")
                 ctk.CTkLabel(row, text=art_data['artist'][:36], font=(AppStyles.FONT, 12, "bold"), text_color=AppStyles.TEXT_TITLE, anchor="w").pack(side="left", fill="x", expand=True, padx=6)
                 ctk.CTkLabel(row, text=f"{art_data['total_plays']} plays", font=(AppStyles.FONT, 10, "bold"), text_color=AppStyles.TEXT_MUTED).pack(side="right", padx=6)
-                ctk.CTkButton(row, text="🔍", width=26, height=26, corner_radius=13, fg_color=AppStyles.BG_INPUT, hover_color=AppStyles.SECONDARY, text_color=AppStyles.TEXT_TITLE, font=(AppStyles.FONT, 10), command=lambda a_name=art_data['artist']: self._quick_artist_search(a_name)).pack(side="right")
+                ctk.CTkButton(row, text="", image=get_icon("search", size=(11, 11), color=AppStyles.TEXT_TITLE), width=26, height=26, corner_radius=13, fg_color=AppStyles.BG_INPUT, hover_color=AppStyles.SECONDARY, command=lambda a_name=art_data['artist']: self._quick_artist_search(a_name)).pack(side="right")
         else:
             ctk.CTkLabel(top5_a_frame, text="No artist listening history yet", font=(AppStyles.FONT, 11), text_color=AppStyles.TEXT_MUTED).pack(padx=16, pady=20)
 
         timeline_f = ctk.CTkFrame(self.track_scroll, fg_color=AppStyles.BG_CARD, corner_radius=14, border_width=1, border_color=AppStyles.BORDER_CARD)
         timeline_f.pack(fill="x", pady=(0, 20), padx=4)
 
-        ctk.CTkLabel(timeline_f, text="🕒 RECENT STREAMING TIMELINE (EXACT SESSIONS)", font=(AppStyles.FONT, 11, "bold"), text_color=AppStyles.TEXT_TITLE).pack(anchor="w", padx=16, pady=(14, 8))
+        ctk.CTkLabel(timeline_f, text="RECENT STREAMING TIMELINE (EXACT SESSIONS)", font=(AppStyles.FONT, 11, "bold"), text_color=AppStyles.TEXT_TITLE).pack(anchor="w", padx=16, pady=(14, 8))
 
         if stats["recent_logs"]:
             for item in stats["recent_logs"]:
                 ts_str = datetime.datetime.fromtimestamp(item["played_at"]).strftime("%b %d, %Y • %I:%M %p")
                 row = ctk.CTkFrame(timeline_f, fg_color="transparent", height=40)
                 row.pack(fill="x", padx=14, pady=2)
-                ctk.CTkLabel(row, text="🎵", font=(AppStyles.FONT, 11)).pack(side="left", padx=(0, 6))
                 ctk.CTkLabel(row, text=item['title'][:44], font=(AppStyles.FONT, 11, "bold"), text_color=AppStyles.TEXT_TITLE, anchor="w").pack(side="left")
                 ctk.CTkLabel(row, text=f" — {item['artist'][:26]}", font=(AppStyles.FONT, 11), text_color=AppStyles.TEXT_MUTED, anchor="w").pack(side="left")
                 ctk.CTkLabel(row, text=ts_str, font=(AppStyles.FONT, 10), text_color=AppStyles.TEXT_FAINT).pack(side="right")
-                ctk.CTkButton(row, text="▶", width=24, height=24, corner_radius=12, fg_color=AppStyles.BG_INPUT, hover_color=AppStyles.ACCENT, text_color=AppStyles.TEXT_TITLE, font=(AppStyles.FONT, 9, "bold"), command=lambda t_data=item: self.request_playback(t_data)).pack(side="right", padx=10)
+                ctk.CTkButton(row, text="", image=get_icon("play", size=(9, 9), color=AppStyles.TEXT_TITLE), width=24, height=24, corner_radius=12, fg_color=AppStyles.BG_INPUT, hover_color=AppStyles.ACCENT, command=lambda t_data=item: self.request_playback(t_data)).pack(side="right", padx=10)
         else:
             ctk.CTkLabel(timeline_f, text="Your recent playback sessions will appear here in chronological order.", font=(AppStyles.FONT, 11), text_color=AppStyles.TEXT_MUTED).pack(padx=16, pady=20)
 
@@ -964,7 +959,7 @@ class PulseStreamStudio(ctk.CTk):
 
         ctk.CTkButton(
             header_box,
-            text="🗑 Delete Playlist",
+            text=" Delete Playlist",
             width=125,
             height=30,
             corner_radius=8,
@@ -1169,7 +1164,7 @@ class PulseStreamStudio(ctk.CTk):
 
         ok = self.player.play(fp)
         if ok:
-            self.main_play_btn.configure(text="⏸")
+            self.main_play_btn.configure(image=get_icon("pause", size=(16, 16), color=AppStyles.TEXT_WHITE))
             self.seek_bar.configure(to=dur)
             self.seek_bar.set(0)
             self.elapsed_lbl.configure(text="00:00")
@@ -1178,14 +1173,12 @@ class PulseStreamStudio(ctk.CTk):
 
             self.dock_title_lbl.configure(text=track_data.get("title", "Unknown"))
             self.dock_sub_lbl.configure(text=track_data.get("artist", "Unknown"))
-            cover_img = create_rounded_cover(track_data.get("thumbnail", ""), size=(54, 54), radius=12)
+            cover_img = create_rounded_cover(track_data.get("thumbnail", ""), size=(56, 56), radius=14)
             self.dock_art.configure(image=cover_img)
 
             is_fav = self.db.is_favorite(fp)
-            self.dock_fav_btn.configure(
-                text="♥" if is_fav else "♡",
-                text_color=AppStyles.ACCENT if is_fav else AppStyles.TEXT_MUTED
-            )
+            fav_icon = get_icon("heart_filled", size=(16, 16), color=AppStyles.ACCENT) if is_fav else get_icon("heart_outline", size=(16, 16), color=AppStyles.TEXT_MUTED)
+            self.dock_fav_btn.configure(image=fav_icon)
 
             self.drawer_title.configure(text=track_data.get("title", "Unknown"))
             self.drawer_artist.configure(text=track_data.get("artist", "Unknown"))
@@ -1205,7 +1198,8 @@ class PulseStreamStudio(ctk.CTk):
             return
         if self.player.is_active():
             paused = self.player.toggle_pause()
-            self.main_play_btn.configure(text="▶" if paused else "⏸")
+            btn_icon = get_icon("play", size=(16, 16), color=AppStyles.TEXT_WHITE) if paused else get_icon("pause", size=(16, 16), color=AppStyles.TEXT_WHITE)
+            self.main_play_btn.configure(image=btn_icon)
             self.visualizer.set_playing(not paused)
 
     def prev_track(self):
@@ -1242,18 +1236,19 @@ class PulseStreamStudio(ctk.CTk):
 
     def toggle_shuffle(self):
         self.shuffle_mode = not self.shuffle_mode
-        self.shuf_btn.configure(text_color=AppStyles.ACCENT if self.shuffle_mode else AppStyles.TEXT_MUTED)
+        c = AppStyles.ACCENT if self.shuffle_mode else AppStyles.TEXT_MUTED
+        self.shuf_btn.configure(image=get_icon("shuffle", size=(14, 14), color=c))
 
     def toggle_repeat(self):
         if self.repeat_mode == "NONE":
             self.repeat_mode = "ALL"
-            self.rep_btn.configure(text="🔁", text_color=AppStyles.ACCENT)
+            self.rep_btn.configure(image=get_icon("repeat", size=(14, 14), color=AppStyles.ACCENT))
         elif self.repeat_mode == "ALL":
             self.repeat_mode = "ONE"
-            self.rep_btn.configure(text="🔂", text_color=AppStyles.SECONDARY)
+            self.rep_btn.configure(image=get_icon("repeat", size=(14, 14), color=AppStyles.SECONDARY))
         else:
             self.repeat_mode = "NONE"
-            self.rep_btn.configure(text="🔁", text_color=AppStyles.TEXT_MUTED)
+            self.rep_btn.configure(image=get_icon("repeat", size=(14, 14), color=AppStyles.TEXT_MUTED))
 
     def _on_slider_move(self, val):
         pass
